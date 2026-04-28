@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv init *)",
+      "Bash(uv sync *)",
+      "Bash(uv python *)",
+      "Bash(uv run *)",
+      "Bash(docker compose *)",
+      "Bash(docker --context default compose --project-directory \"c:\\\\Users\\\\Jamal\\\\Documents\\\\bootcamps\\\\AIE\\\\Week 4\\\\smart-travel-planner\" up --build -d)"
+    ]
+  }
+}
