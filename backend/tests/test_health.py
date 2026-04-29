@@ -25,6 +25,6 @@ def test_healthz_db_unreachable_returns_503() -> None:
         with TestClient(app) as c:
             response = c.get("/healthz")
         assert response.status_code == 503
-        assert response.json() == {"status": "degraded", "db": "unreachable"}
+        assert response.json() == {"status": "degraded", "db": "unreachable", }
     finally:
         app.dependency_overrides.pop(get_session, None)

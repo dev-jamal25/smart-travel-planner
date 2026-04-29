@@ -50,13 +50,11 @@ async def healthz(
         await session.execute(text("SELECT 1"))
         return {"status": "ok", "db": "connected"}
     
-    except Exception as exc:
+    except Exception:
         logger.exception("Health check database connection failed")
 
         response.status_code = 503
         return {
             "status": "degraded",
             "db": "unreachable",
-            "error_type": type(exc).__name__,
-            "error": str(exc),
         }
