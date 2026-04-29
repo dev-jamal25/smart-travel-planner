@@ -1,0 +1,37 @@
+# AI Change Log
+
+## Foundation setup
+
+Summary:
+- Created initial backend foundation for Smart Travel Planner.
+- Added FastAPI app structure, config, async DB session wiring, Supabase JWT auth dependency, Alembic migration setup, Run model, health check, and initial tests.
+
+Files affected:
+- backend/app/config.py
+- backend/app/db/session.py
+- backend/app/dependencies.py
+- backend/app/main.py
+- backend/app/schemas/auth.py
+- backend/app/models/db.py
+- backend/app/db/migrations/
+- backend/tests/
+- .env.example
+- docker-compose.yml
+- backend/Dockerfile
+- backend/pyproject.toml
+
+Reason:
+- Establish the project base before implementing ML serving, RAG, tools, agent orchestration, webhook delivery, and frontend.
+
+Tests:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up:
+- Add ML classifier service wrapper.
+- Add RAG ingestion and pgvector tables.
+- Add weather tool.
+- Add Discord webhook service.
+- Add agent orchestration.
+- Add frontend.
