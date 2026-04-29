@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.exceptions import AuthError
 from app.schemas.auth import CurrentUser
+from app.services.rag_service import RagService
 
 
 async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
@@ -36,3 +37,7 @@ async def get_current_user(request: Request) -> CurrentUser:
 
 def get_classifier() -> None:
     raise NotImplementedError
+
+
+def get_rag_service(request: Request) -> RagService:
+    return RagService(embedder=request.app.state.embedder)

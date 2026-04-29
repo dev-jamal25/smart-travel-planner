@@ -9,7 +9,11 @@ from app.config import get_settings
 
 
 def create_engine() -> AsyncEngine:
-    return create_async_engine(get_settings().database_url, echo=False)
+    return create_async_engine(
+        get_settings().database_url,
+        echo=False,
+        connect_args={"statement_cache_size": 0},
+    )
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

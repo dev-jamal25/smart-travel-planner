@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -7,6 +8,7 @@ from fastapi import Depends, FastAPI, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db.session import create_engine, create_session_factory
 from app.dependencies import get_session
 from app.exceptions import AuthError
@@ -17,9 +19,13 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    from sentence_transformers import (
+        SentenceTransformer,  # lazy: keeps PyTorch out of module-level imports
+    )
+
     configure_logging()
     # TODO: load classifier here
-    # TODO: load embedder here
+    app.state.embedder = await asyncio.to_thread(SentenceTransformer, get_settings().embedding_model)
     engine = create_engine()
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)

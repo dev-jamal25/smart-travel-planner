@@ -30,8 +30,46 @@ Tests:
 
 Follow-up:
 - Add ML classifier service wrapper.
-- Add RAG ingestion and pgvector tables.
 - Add weather tool.
 - Add Discord webhook service.
 - Add agent orchestration.
 - Add frontend.
+
+## RAG foundation
+
+Summary:
+- Added DestinationDocument and DestinationChunk ORM models with pgvector Vector(384) column.
+- Added Alembic migration a4f8c2d1e9b3 chaining from c9fb57636433: enables vector extension, creates both tables and indexes.
+- Added ChunkResult Pydantic schema (app/schemas/rag.py).
+- Added RagService with chunk_text() pure function, store_document_with_chunks(), and retrieve_top_k() using pgvector cosine distance (app/services/rag_service.py).
+- Added get_rag_service() dependency in app/dependencies.py.
+- Wired SentenceTransformer singleton (lazy import) into FastAPI lifespan in app/main.py.
+- Added ingestion script backend/scripts/ingest_rag_documents.py reading from rag_data/raw/*.txt.
+- Added rag_data/raw/.gitkeep placeholder directory for source documents.
+- Added docs/rag_foundation.md with design rationale.
+- Added mypy override for pgvector.* (no published stubs) in pyproject.toml.
+
+Files changed:
+- backend/app/models/db.py
+- backend/app/schemas/rag.py (new)
+- backend/app/services/rag_service.py (new)
+- backend/app/dependencies.py
+- backend/app/main.py
+- backend/app/db/migrations/versions/a4f8c2d1e9b3_add_rag_tables.py (new)
+- backend/scripts/ingest_rag_documents.py (new)
+- backend/rag_data/raw/.gitkeep (new)
+- backend/tests/test_rag_service.py (new)
+- backend/pyproject.toml
+- docs/rag_foundation.md (new)
+
+Tests:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up:
+- Add 20-30 real destination .txt documents to rag_data/raw/.
+- Add HNSW vector index after first ingestion (see docs/rag_foundation.md).
+- Wire RagService into LangGraph agent as the destination retrieval tool.
+- Add Haiku query rewriting before retrieval.
+- Add hybrid BM25 re-ranking pass.
