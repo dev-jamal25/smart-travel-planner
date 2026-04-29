@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 
 import joblib
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
@@ -26,7 +25,6 @@ from sklearn.impute import SimpleImputer
 from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
-    ConfusionMatrixDisplay,
     accuracy_score,
     classification_report,
     confusion_matrix,
@@ -41,7 +39,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 ROOT_PATH = Path(__file__).resolve().parent  # backend/ml/
 BACKEND_PATH = ROOT_PATH.parent  # backend/
 RANDOM_STATE = 42
-DATASET_PATH = ROOT_PATH / "data" / "processed" / "travel_data.csv"
+DATASET_PATH = ROOT_PATH / "data" / "processed" / "travel_data_labeled.csv"
 TARGET_COLUMN = "Travel Style"
 ID_COLUMNS = ["Destination Name"]
 LEAKAGE_COLUMNS: list[str] = []
@@ -206,50 +204,22 @@ def evaluate_model(
     return result, fitted
 
 
-def plot_model_comparison(results_df: pd.DataFrame, output_dir: Path) -> None:
-    metric_cols = [
-        "val_accuracy",
-        "val_macro_f1",
-        "val_precision_macro",
-        "val_recall_macro",
-    ]
-    ax = results_df.set_index("model")[metric_cols].plot(kind="bar", figsize=(12, 6))
-    ax.set_title("val Metric Comparison")
-    ax.set_ylabel("Score")
-    ax.set_ylim(0, 1.05)
-    ax.legend(loc="lower right")
-    plt.xticks(rotation=25, ha="right")
-    plt.tight_layout()
-    plt.savefig(output_dir / "val_metric_comparison.png", dpi=150)
-    plt.close()
+def write_json(path: Path, data: object) -> None:
+    """Write data to JSON file with proper type conversion."""
+    def json_converter(obj: object) -> object:
+        """Convert numpy/pandas types to JSON-serializable Python types."""
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, pd.Series):
+            return obj.to_dict()
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
-    gap_cols = ["train_val_accuracy_gap", "train_val_macro_f1_gap"]
-    ax = results_df.set_index("model")[gap_cols].plot(kind="bar", figsize=(10, 5))
-    ax.set_title("Train–Validation Gap")
-    ax.set_ylabel("Train score minus validation score")
-    plt.xticks(rotation=25, ha="right")
-    plt.tight_layout()
-    plt.savefig(output_dir / "train_val_gap.png", dpi=150)
-    plt.close()
-
-
-def save_confusion_matrix(
-    estimator: Pipeline,
-    X: pd.DataFrame,
-    y: pd.Series,
-    labels: list[str],
-    title: str,
-    output_path: Path,
-) -> None:
-    predictions = estimator.predict(X)
-    cm = confusion_matrix(y, predictions, labels=labels)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=labels)
-    fig, ax = plt.subplots(figsize=(8, 6))
-    disp.plot(ax=ax, values_format="d", xticks_rotation=45)
-    ax.set_title(title)
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150)
-    plt.close()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, default=json_converter)
 
 
 def main() -> None:
@@ -346,21 +316,10 @@ def main() -> None:
         "train_val_macro_f1_gap",
     ]])
 
-    results_df.to_csv(output_dir / "results_validation.csv", index=False)
     results_df.to_csv(output_dir / "results.csv", index=False)
-    plot_model_comparison(results_df, output_dir)
+    write_json(output_dir / "results_validation.json", results_df.to_dict(orient="records"))
 
     labels = sorted(y.unique().tolist())
-    for name, fitted in fitted_models.items():
-        safe_name = name.replace(" ", "_").replace("/", "_")
-        save_confusion_matrix(
-            fitted,
-            X_val,
-            y_val,
-            labels,
-            f"Validation Confusion Matrix — {name}",
-            output_dir / f"confusion_matrix_validation_{safe_name}.png",
-        )
 
     print_header("7. K-fold cross-validation on training data")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
@@ -397,7 +356,7 @@ def main() -> None:
         )
 
     cv_df = pd.DataFrame(cv_rows).sort_values("cv_macro_f1_mean", ascending=False)
-    cv_df.to_csv(output_dir / "results_cv.csv", index=False)
+    write_json(output_dir / "results_cv.json", cv_df.to_dict(orient="records"))
 
     print_header("8. Interpretability")
     # Logistic Regression coefficients
@@ -423,7 +382,7 @@ def main() -> None:
                     "feature": feature_names[idx],
                     "coefficient": coefs[idx],
                 })
-        pd.DataFrame(coef_rows).to_csv(output_dir / "logistic_regression_top_coefficients.csv", index=False)
+        write_json(output_dir / "logistic_regression_top_coefficients.json", coef_rows)
         print("Saved Logistic Regression coefficient interpretation.")
 
     # Permutation importance for best validation model
@@ -443,7 +402,7 @@ def main() -> None:
         "importance_mean": perm.importances_mean,
         "importance_std": perm.importances_std,
     }).sort_values("importance_mean", ascending=False)
-    perm_df.to_csv(output_dir / "permutation_importance_best_validation_model.csv", index=False)
+    write_json(output_dir / "permutation_importance_best_validation_model.json", perm_df.to_dict(orient="records"))
     print(f"Saved permutation importance for {best_val_model_name}.")
 
     print_header("9. Hyperparameter tuning")
@@ -480,7 +439,7 @@ def main() -> None:
     grid_search.fit(X_train, y_train)
 
     tuning_df = pd.DataFrame(grid_search.cv_results_).sort_values("rank_test_score")
-    tuning_df.to_csv(output_dir / "tuning_results.csv", index=False)
+    write_json(output_dir / "tuning_results.json", tuning_df.to_dict(orient="records"))
 
     tuned_model = grid_search.best_estimator_
     tuned_val_pred = tuned_model.predict(X_val)
@@ -505,6 +464,7 @@ def main() -> None:
     all_results_df = pd.concat([results_df, pd.DataFrame([tuned_result])], ignore_index=True)
     all_results_df = all_results_df.sort_values("val_macro_f1", ascending=False)
     all_results_df.to_csv(output_dir / "results.csv", index=False)
+    write_json(output_dir / "results.json", all_results_df.to_dict(orient="records"))
 
     print_header("10. Final model selection and untouched test evaluation")
     selected_name = all_results_df.iloc[0]["model"]
@@ -534,21 +494,13 @@ def main() -> None:
     print(json.dumps(test_metrics, indent=2))
 
     report_dict = classification_report(y_test, test_pred, output_dict=True, zero_division=0)
-    pd.DataFrame(report_dict).transpose().to_csv(output_dir / "final_classification_report.csv")
+    write_json(output_dir / "final_classification_report.json", report_dict)
 
     final_cm = confusion_matrix(y_test, test_pred, labels=labels)
-    pd.DataFrame(final_cm, index=labels, columns=labels).to_csv(output_dir / "final_confusion_matrix.csv")
-    save_confusion_matrix(
-        final_pipeline,
-        X_test,
-        y_test,
-        labels,
-        f"Final Test Confusion Matrix — {selected_name}",
-        output_dir / "final_confusion_matrix.png",
-    )
+    final_cm_dict = {"labels": labels, "confusion_matrix": final_cm.tolist()}
+    write_json(output_dir / "final_confusion_matrix.json", final_cm_dict)
 
-    with open(output_dir / "final_test_metrics.json", "w", encoding="utf-8") as f:
-        json.dump(test_metrics, f, indent=2)
+    write_json(output_dir / "final_test_metrics.json", test_metrics)
 
     model_path = model_dir / "final_travel_style_pipeline.joblib"
     joblib.dump(final_pipeline, model_path)
@@ -570,8 +522,7 @@ def main() -> None:
         "note": "Destination Name excluded to reduce memorisation. Test set evaluated only once after model selection.",
     }
 
-    with open(output_dir / "model_metadata.json", "w", encoding="utf-8") as f:
-        json.dump(metadata, f, indent=2)
+    write_json(output_dir / "model_metadata.json", metadata)
 
     print(f"\nSaved final pipeline to: {model_path}")
     print(f"Saved outputs to: {output_dir}")

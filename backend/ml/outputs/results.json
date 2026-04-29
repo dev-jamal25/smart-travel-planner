@@ -1,0 +1,67 @@
+[
+  {
+    "timestamp": "2026-04-29T23:44:36",
+    "model": "HistGradientBoosting_balanced",
+    "params": "{'categorical_features': 'from_dtype', 'class_weight': 'balanced', 'early_stopping': 'auto', 'interaction_cst': None, 'l2_regularization': 0.0, 'learning_rate': 0.1, 'loss': 'log_loss', 'max_bins': 255, 'max_depth': None, 'max_features': 1.0, 'max_iter': 100, 'max_leaf_nodes': 31, 'min_samples_leaf': 20, 'monotonic_cst': None, 'n_iter_no_change': 10, 'random_state': 42, 'scoring': 'loss', 'tol': 1e-07, 'validation_fraction': 0.1, 'verbose': 0, 'warm_start': False}",
+    "train_accuracy": 1.0,
+    "train_macro_f1": 1.0,
+    "val_accuracy": 0.98,
+    "val_macro_f1": 0.9782236215941004,
+    "val_precision_macro": 0.9839469473615816,
+    "val_recall_macro": 0.9732342951595676,
+    "train_val_accuracy_gap": 0.020000000000000018,
+    "train_val_macro_f1_gap": 0.021776378405899632
+  },
+  {
+    "timestamp": "2026-04-29T23:44:33",
+    "model": "RandomForest_balanced",
+    "params": "{'bootstrap': True, 'ccp_alpha': 0.0, 'class_weight': 'balanced', 'criterion': 'gini', 'max_depth': None, 'max_features': 'sqrt', 'max_leaf_nodes': None, 'max_samples': None, 'min_impurity_decrease': 0.0, 'min_samples_leaf': 1, 'min_samples_split': 2, 'min_weight_fraction_leaf': 0.0, 'monotonic_cst': None, 'n_estimators': 100, 'n_jobs': -1, 'oob_score': False, 'random_state': 42, 'verbose': 0, 'warm_start': False}",
+    "train_accuracy": 1.0,
+    "train_macro_f1": 1.0,
+    "val_accuracy": 0.915,
+    "val_macro_f1": 0.8967879008391025,
+    "val_precision_macro": 0.9090179147448958,
+    "val_recall_macro": 0.8879454631216732,
+    "train_val_accuracy_gap": 0.08499999999999996,
+    "train_val_macro_f1_gap": 0.10321209916089746
+  },
+  {
+    "timestamp": "2026-04-29T23:44:48",
+    "model": "RandomForest_tuned",
+    "params": "{'classifier__class_weight': 'balanced', 'classifier__max_depth': None, 'classifier__min_samples_leaf': 1, 'classifier__n_estimators': 100}",
+    "train_accuracy": 1.0,
+    "train_macro_f1": 1.0,
+    "val_accuracy": 0.915,
+    "val_macro_f1": 0.8967879008391025,
+    "val_precision_macro": 0.9090179147448958,
+    "val_recall_macro": 0.8879454631216732,
+    "train_val_accuracy_gap": 0.08499999999999996,
+    "train_val_macro_f1_gap": 0.10321209916089746
+  },
+  {
+    "timestamp": "2026-04-29T23:44:33",
+    "model": "LogisticRegression_balanced",
+    "params": "{'C': 1.0, 'class_weight': 'balanced', 'dual': False, 'fit_intercept': True, 'intercept_scaling': 1, 'l1_ratio': 0.0, 'max_iter': 3000, 'n_jobs': None, 'penalty': 'deprecated', 'random_state': 42, 'solver': 'lbfgs', 'tol': 0.0001, 'verbose': 0, 'warm_start': False}",
+    "train_accuracy": 0.875,
+    "train_macro_f1": 0.8741725146055118,
+    "val_accuracy": 0.805,
+    "val_macro_f1": 0.7960625839528847,
+    "val_precision_macro": 0.7868064631973963,
+    "val_recall_macro": 0.8165602535207023,
+    "train_val_accuracy_gap": 0.06999999999999995,
+    "train_val_macro_f1_gap": 0.07810993065262717
+  },
+  {
+    "timestamp": "2026-04-29T23:44:33",
+    "model": "ExtraTrees_balanced",
+    "params": "{'bootstrap': False, 'ccp_alpha': 0.0, 'class_weight': 'balanced', 'criterion': 'gini', 'max_depth': None, 'max_features': 'sqrt', 'max_leaf_nodes': None, 'max_samples': None, 'min_impurity_decrease': 0.0, 'min_samples_leaf': 1, 'min_samples_split': 2, 'min_weight_fraction_leaf': 0.0, 'monotonic_cst': None, 'n_estimators': 100, 'n_jobs': -1, 'oob_score': False, 'random_state': 42, 'verbose': 0, 'warm_start': False}",
+    "train_accuracy": 1.0,
+    "train_macro_f1": 1.0,
+    "val_accuracy": 0.7,
+    "val_macro_f1": 0.6830549704752565,
+    "val_precision_macro": 0.689012402277295,
+    "val_recall_macro": 0.6859007994839253,
+    "train_val_accuracy_gap": 0.30000000000000004,
+    "train_val_macro_f1_gap": 0.31694502952474346
+  }
+]

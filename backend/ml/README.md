@@ -14,7 +14,7 @@ The original dataset was `Tourist_Destinations.csv`. It contained **2,000 touris
 - `Annual Visitors (M)`
 - `UNESCO Site`
 
-The original file did **not** contain the required target column, `Travel Style`. To match the assignment, a curated 200-row dataset was created: "data/travel_styles_200.csv"
+The original dataset in data/raw/Tourist_Destinations.csv did **not** contain the required target column, `Travel Style`. To match the assignment, a curated  dataset was created: "data/processed/travel_data_labeled.csv"
 
 This new dataset keeps the original destination attributes and adds one target column:
 
@@ -22,7 +22,7 @@ This new dataset keeps the original destination attributes and adds one target c
 Travel Style
 ```
 
-The 200 rows were selected from the original dataset and labelled using a fixed rule-based scoring rubric. The model therefore learns the documented labelling logic, not an objective universal truth about tourism.
+The data were selected from the original dataset and labelled using a fixed rule-based scoring rubric. The model therefore learns the documented labelling logic, not an objective universal truth about tourism.
 
 ---
 
@@ -30,16 +30,16 @@ The 200 rows were selected from the original dataset and labelled using a fixed 
 
 Target column: `Travel Style`  
 Problem type: multiclass classification  
-Rows used: 200
+Rows used: 2000
 
 | Travel Style | Rows |
 |---|---:|
-| Family | 43 |
-| Culture | 39 |
-| Luxury | 38 |
-| Budget | 37 |
-| Adventure | 23 |
-| Relaxation | 20 |
+| Family | 449 |
+| Culture | 408 |
+| Luxury | 395 |
+| Budget | 372 |
+| Adventure | 235 |
+| Relaxation | 141 |
 
 The dataset is mildly imbalanced, especially for `Adventure` and `Relaxation`, so macro F1 and per-class metrics are more important than accuracy alone.
 
@@ -119,7 +119,7 @@ The notebook compares:
 - Logistic Regression with `class_weight='balanced'`
 - Random Forest with `class_weight='balanced'`
 - Extra Trees with `class_weight='balanced'`
-- SVC with `class_weight='balanced'`
+- Histogram Gradient Boosting with `class_weight='balanced'`
 
 The main selection metric is **macro F1**, because the classes are not perfectly balanced.
 
@@ -140,48 +140,56 @@ The searched parameters were:
 
 ## Quick evaluation summary
 
-In the current run, the tuned Random Forest gave the strongest validation result.
+In the current run, Histogram Gradient Boosting gave the strongest validation result.
 
 | Model | Val Accuracy | Val Macro F1 |
 |---|---:|---:|
-| RandomForest_tuned | 0.850 | 0.850 |
-| RandomForest_balanced | 0.800 | 0.794 |
-| SVC_balanced | 0.700 | 0.684 |
-| LogisticRegression_balanced | 0.675 | 0.674 |
-| ExtraTrees_balanced | 0.625 | 0.646 |
+| HistGradientBoosting_balanced | 0.980 | 0.978 |
+| RandomForest_balanced | 0.915 | 0.897 |
+| LogisticRegression_balanced | 0.775 | 0.796 |
+| ExtraTrees_balanced | 0.625 | 0.683 |
+| RandomForest_tuned | 0.915 | 0.897 |
 
 The selected final model was:
 
 ```text
-RandomForest_tuned
+HistGradientBoosting_balanced
 ```
 
 Final untouched test-set metrics:
 
 | Metric | Score |
 |---|---:|
-| Accuracy | 0.650 |
-| Macro F1 | 0.624 |
-| Macro Precision | 0.674 |
-| Macro Recall | 0.657 |
+| Accuracy | 0.980 |
+| Macro F1 | 0.982 |
+| Macro Precision | 0.986 |
+| Macro Recall | 0.979 |
 
-The lower test score compared with validation shows that the 200-row dataset is small and the model may still be sensitive to the split. This is why cross-validation, macro metrics, and per-class reports are included.
+The lower test score compared with validation shows that the dataset is small and the model may still be sensitive to the split. This is why cross-validation, macro metrics, and per-class reports are included.
 
 ---
 
 ## Outputs
 
-Running the notebook/script creates:
+Running the script creates JSON files for all structured outputs (preferred format for programmatic access) and keeps `results.csv` for assignment compliance.
 
-- `outputs/results.csv`
-- `outputs/results_val.csv` or `outputs/results_validation.csv`
-- `outputs/results_cv.csv`
-- `outputs/tuning_results.csv`
-- `outputs/final_test_metrics.json`
-- `outputs/final_classification_report.csv`
-- `outputs/final_confusion_matrix.csv`
-- `outputs/model_metadata.json`
-- `models/final_travel_style_pipeline.joblib`
+**Tabular outputs (JSON format):**
+- `outputs/results.json` — all model results (validation and tuning)
+- `outputs/results.csv` — same as results.json, kept for assignment compliance
+- `outputs/results_validation.json` — baseline model validation metrics
+- `outputs/results_cv.json` — 5-fold cross-validation results
+- `outputs/tuning_results.json` — GridSearchCV hyperparameter tuning details
+- `outputs/final_test_metrics.json` — final model performance on test set
+- `outputs/final_classification_report.json` — per-class precision/recall/F1 from test set
+- `outputs/final_confusion_matrix.json` — confusion matrix (test set)
+- `outputs/logistic_regression_top_coefficients.json` — interpretability: top feature weights
+- `outputs/permutation_importance_best_validation_model.json` — interpretability: feature importance
+- `outputs/model_metadata.json` — dataset info, selected model, feature names, class distribution
+
+**Model artifact:**
+- `models/final_travel_style_pipeline.joblib` — fully fitted scikit-learn Pipeline (preprocessing + classifier)
+
+**Note:** No PNG graphs are generated. All results are stored as structured data (JSON/CSV) for reproducibility and integration.
 
 ---
 
@@ -202,5 +210,4 @@ Dependencies are pinned in `requirements.txt`.
 - The labels are rule-based, so the model learns the labelling rubric rather than a perfect real-world truth.
 - `Family` is a proxy label because the original dataset has no direct family-specific features.
 - `Type` is a strong domain feature and possible target-proxy risk, but it is kept and documented because it represents destination category rather than the final style label.
-- The dataset has only 200 rows, so results can vary by split.
 - `Destination Name` is excluded to reduce memorisation.

@@ -1,0 +1,722 @@
+[
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Type_Adventure",
+    "coefficient": 5.151229325688971
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Autumn",
+    "coefficient": 0.8962381045286211
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Country_India",
+    "coefficient": 0.8072691680918267
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Country_Australia",
+    "coefficient": 0.5837787349372793
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Type_Nature",
+    "coefficient": 0.5728908421184433
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Country_Brazil",
+    "coefficient": 0.43803000313550594
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Country_Thailand",
+    "coefficient": 0.42942610867734565
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__UNESCO Site_No",
+    "coefficient": 0.39824896106115903
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Continent_Oceania",
+    "coefficient": 0.3326338865086101
+  },
+  {
+    "class": "Adventure",
+    "direction": "positive",
+    "feature": "categorical__Country_Egypt",
+    "coefficient": 0.3059571746860513
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Type_Beach",
+    "coefficient": -1.7251168308392772
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Type_City",
+    "coefficient": -1.5152230761500012
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Type_Historical",
+    "coefficient": -1.2551400791421274
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Best Season_Summer",
+    "coefficient": -1.253877566787979
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Type_Religious",
+    "coefficient": -1.2340601767529538
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "numeric__Annual Visitors (M)",
+    "coefficient": -0.9542928524662959
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Country_South Africa",
+    "coefficient": -0.677314717664363
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "numeric__Avg Rating",
+    "coefficient": -0.5839482254324668
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Country_China",
+    "coefficient": -0.5266062610547891
+  },
+  {
+    "class": "Adventure",
+    "direction": "negative",
+    "feature": "categorical__Continent_Africa",
+    "coefficient": -0.45296064033222433
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Country_New Zealand",
+    "coefficient": 0.6847165013419544
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Type_Nature",
+    "coefficient": 0.5232668472498322
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Country_Japan",
+    "coefficient": 0.49880736720222346
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Winter",
+    "coefficient": 0.4843790264404063
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__UNESCO Site_No",
+    "coefficient": 0.4448155130142247
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Type_City",
+    "coefficient": 0.37186299508225235
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Continent_Oceania",
+    "coefficient": 0.323706324837519
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Country_Morocco",
+    "coefficient": 0.3220403966716575
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Country_USA",
+    "coefficient": 0.27905802433857907
+  },
+  {
+    "class": "Budget",
+    "direction": "positive",
+    "feature": "categorical__Type_Adventure",
+    "coefficient": 0.216977720352612
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "numeric__Avg Cost (USD/day)",
+    "coefficient": -4.381431223287272
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Type_Beach",
+    "coefficient": -0.6268440332655216
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Type_Historical",
+    "coefficient": -0.5748281808331235
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Continent_Asia",
+    "coefficient": -0.5609247262243569
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Best Season_Spring",
+    "coefficient": -0.45581847711805407
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__UNESCO Site_Yes",
+    "coefficient": -0.4448054569932684
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Country_Vietnam",
+    "coefficient": -0.42545375478826886
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Country_India",
+    "coefficient": -0.3838039633232915
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Country_Australia",
+    "coefficient": -0.3610101765044349
+  },
+  {
+    "class": "Budget",
+    "direction": "negative",
+    "feature": "categorical__Country_Mexico",
+    "coefficient": -0.3169469052736294
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Type_Religious",
+    "coefficient": 3.8704379092081584
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Type_Historical",
+    "coefficient": 3.525562420388197
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__UNESCO Site_Yes",
+    "coefficient": 1.6368035025108136
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Country_China",
+    "coefficient": 0.553357805705644
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Country_Italy",
+    "coefficient": 0.37190042694466996
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Country_Kenya",
+    "coefficient": 0.3364601834143796
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Autumn",
+    "coefficient": 0.3184200335901985
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Country_Australia",
+    "coefficient": 0.21893906106757366
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Country_Canada",
+    "coefficient": 0.2086080326176273
+  },
+  {
+    "class": "Culture",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Winter",
+    "coefficient": 0.18236710414535054
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Type_Beach",
+    "coefficient": -2.47430784674351
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Type_Nature",
+    "coefficient": -1.9415011163774527
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Type_Adventure",
+    "coefficient": -1.8774684479412418
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__UNESCO Site_No",
+    "coefficient": -1.621054613758139
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Type_City",
+    "coefficient": -1.0869740297814756
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Country_Greece",
+    "coefficient": -0.3786507963386791
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Best Season_Summer",
+    "coefficient": -0.3052346276914999
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Country_Japan",
+    "coefficient": -0.289105958057226
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "numeric__Avg Cost (USD/day)",
+    "coefficient": -0.28138166219302124
+  },
+  {
+    "class": "Culture",
+    "direction": "negative",
+    "feature": "categorical__Country_New Zealand",
+    "coefficient": -0.280234617176993
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__Type_City",
+    "coefficient": 2.312474664804538
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__Type_Nature",
+    "coefficient": 1.453680993541464
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "numeric__Avg Rating",
+    "coefficient": 0.9445054345832369
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "numeric__Annual Visitors (M)",
+    "coefficient": 0.684012313042519
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Summer",
+    "coefficient": 0.6461692728720853
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__Country_Vietnam",
+    "coefficient": 0.367985228149543
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__Type_Beach",
+    "coefficient": 0.31345577863946805
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__UNESCO Site_No",
+    "coefficient": 0.2958631861123971
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__Country_France",
+    "coefficient": 0.22564593615015205
+  },
+  {
+    "class": "Family",
+    "direction": "positive",
+    "feature": "categorical__Country_USA",
+    "coefficient": 0.22414257509284974
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Type_Religious",
+    "coefficient": -1.848657506217804
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Type_Adventure",
+    "coefficient": -1.6914136429525035
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Type_Historical",
+    "coefficient": -0.5176830824290733
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Country_Thailand",
+    "coefficient": -0.46275774749186044
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Country_Brazil",
+    "coefficient": -0.35861592034690354
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Country_Australia",
+    "coefficient": -0.34319950451607834
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Best Season_Spring",
+    "coefficient": -0.32103354033790976
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__UNESCO Site_Yes",
+    "coefficient": -0.2740059807263085
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "categorical__Country_Canada",
+    "coefficient": -0.22738636466006285
+  },
+  {
+    "class": "Family",
+    "direction": "negative",
+    "feature": "numeric__Avg Cost (USD/day)",
+    "coefficient": -0.1922932342517907
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "numeric__Avg Cost (USD/day)",
+    "coefficient": 4.621703619554671
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "numeric__Avg Rating",
+    "coefficient": 0.8131471122931139
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "categorical__Type_City",
+    "coefficient": 0.703305031254008
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "categorical__Type_Nature",
+    "coefficient": 0.5728852056022458
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "numeric__Annual Visitors (M)",
+    "coefficient": 0.5415341431003886
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "categorical__Country_South Africa",
+    "coefficient": 0.5362025297227361
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Winter",
+    "coefficient": 0.3765623586167605
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "categorical__Country_Thailand",
+    "coefficient": 0.27106837427502634
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "categorical__Country_France",
+    "coefficient": 0.2519606241151694
+  },
+  {
+    "class": "Luxury",
+    "direction": "positive",
+    "feature": "categorical__Country_Morocco",
+    "coefficient": 0.2517593898273912
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Type_Adventure",
+    "coefficient": -0.9603632176331491
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Country_Kenya",
+    "coefficient": -0.7088458614718137
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Type_Beach",
+    "coefficient": -0.4562912863799325
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Country_India",
+    "coefficient": -0.3818067173441139
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Country_Egypt",
+    "coefficient": -0.285598253525298
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Best Season_Summer",
+    "coefficient": -0.25571203969734485
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Country_Spain",
+    "coefficient": -0.24388626298309374
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Continent_Africa",
+    "coefficient": -0.20648219544698396
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__UNESCO Site_Yes",
+    "coefficient": -0.20200684245037406
+  },
+  {
+    "class": "Luxury",
+    "direction": "negative",
+    "feature": "categorical__Continent_Europe",
+    "coefficient": -0.2013585516894531
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Type_Beach",
+    "coefficient": 4.969104218588771
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Summer",
+    "coefficient": 1.2135258749023572
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Best Season_Spring",
+    "coefficient": 1.0226495677479195
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Country_Greece",
+    "coefficient": 0.7972884415799971
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Country_South Africa",
+    "coefficient": 0.5575178944477324
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Country_Vietnam",
+    "coefficient": 0.49354259302819126
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Continent_Asia",
+    "coefficient": 0.43107052924241585
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Country_Kenya",
+    "coefficient": 0.41213141079860965
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__Continent_Africa",
+    "coefficient": 0.41173173666690877
+  },
+  {
+    "class": "Relaxation",
+    "direction": "positive",
+    "feature": "categorical__UNESCO Site_No",
+    "coefficient": 0.2831151023212284
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Type_Nature",
+    "coefficient": -1.1812227721345334
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Best Season_Winter",
+    "coefficient": -1.1576584832783485
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Type_Historical",
+    "coefficient": -1.138046353648849
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Best Season_Autumn",
+    "coefficient": -1.1077181232534556
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Type_Religious",
+    "coefficient": -1.0546289339629118
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "numeric__Avg Rating",
+    "coefficient": -1.0282436606282774
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Type_Adventure",
+    "coefficient": -0.8389617375146827
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Type_City",
+    "coefficient": -0.7854455852093262
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Country_France",
+    "coefficient": -0.6242016720159743
+  },
+  {
+    "class": "Relaxation",
+    "direction": "negative",
+    "feature": "categorical__Country_Morocco",
+    "coefficient": -0.5625129441357611
+  }
+]

@@ -1,0 +1,42 @@
+[
+  {
+    "feature": "Type",
+    "importance_mean": 0.5035371362739113,
+    "importance_std": 0.01362016217519268
+  },
+  {
+    "feature": "Avg Cost (USD/day)",
+    "importance_mean": 0.4662388178375069,
+    "importance_std": 0.03081755875544902
+  },
+  {
+    "feature": "Avg Rating",
+    "importance_mean": 0.13472451901621005,
+    "importance_std": 0.015731175531330483
+  },
+  {
+    "feature": "Annual Visitors (M)",
+    "importance_mean": 0.10956742862482652,
+    "importance_std": 0.01510533253314504
+  },
+  {
+    "feature": "Best Season",
+    "importance_mean": 0.08587066028424448,
+    "importance_std": 0.01777422012542703
+  },
+  {
+    "feature": "UNESCO Site",
+    "importance_mean": 0.0750552554103241,
+    "importance_std": 0.009017425858795189
+  },
+  {
+    "feature": "Continent",
+    "importance_mean": -0.0008463145063586364,
+    "importance_std": 0.0016926290127172727
+  },
+  {
+    "feature": "Country",
+    "importance_mean": -0.0010647995314501113,
+    "importance_std": 0.0026324215649317657
+  }
+]
