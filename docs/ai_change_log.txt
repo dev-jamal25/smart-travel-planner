@@ -513,3 +513,89 @@ Follow-up:
 - Agent run will construct WebhookTripPlanRequest with only (user_query, destination, trip_plan).
 - Tools used and costs tracked separately in AgentRun and tool call tables.
 - Admin dashboard can query agent run tables for observability.
+
+## Agent orchestration foundation
+
+Summary:
+- Established the infrastructure for LangGraph-based travel planning agent without building the graph or calling Anthropic yet.
+- Refactored FastAPI lifespan into app/lifespan.py: centralizes resource initialization (embedder, classifier, DB, weather, webhook services).
+- Created app/retries.py with Tenacity configuration (DEFAULT_WAIT, DEFAULT_STOP) ready for future LLM/model-router calls.
+- Created app/prompts/ package with three separated prompt templates:
+  - safety.py: Universal system safety guardrails (scope, security, tool allowlist, uncertainty).
+  - agent.py: Four Haiku mechanical task prompts (intent extraction, query rewriting, normalization, tool argument repair).
+  - synthesis.py: Sonnet final synthesis prompt (combine outputs, avoid concatenation, resolve tensions, hide internal details).
+- Created app/schemas/agent.py with core types: PlanTripRequest (user message), PlanTripResponse (run ID, answer, destination, webhook status), TripIntent (extracted intent with optional budget/duration/style), AgentToolError (tool failure).
+- Created app/schemas/agent_tools.py with three input schemas for allowed tools:
+  - DestinationKnowledgeInput: query, top_k (1–10, default 5), destination_filter (normalized).
+  - ClassifyDestinationInput: destination name.
+  - LiveWeatherInput: destination, forecast_days (1–7, default 3).
+- Created app/services/destination_profiles.py: hardcoded profiles for 10 supported destinations with case-insensitive lookup and Kraków/Krakow alias support.
+- Created app/tools/ package with tool foundations:
+  - base.py: ToolResult class (status, output, error, retryable) with .ok() and .fail() helpers.
+  - registry.py: Explicit allowlist of 3 allowed tools (destination_knowledge_retrieval, classify_destination_style, fetch_live_weather); prevents agent from inventing tools.
+  - rag_tool.py: Async wrapper calling RagService.retrieve_top_k() directly (not HTTP), returns ToolResult.
+  - classifier_tool.py: Async wrapper looking up destination profile, calls ClassifierService.predict(), returns ToolResult with style + confidence; error if destination unsupported.
+  - weather_tool.py: Async wrapper calling WeatherService.get_forecast(), converts WeatherServiceError to ToolResult.fail(retryable=True).
+- All tool wrappers follow async-first, Pydantic-boundary, dependency injection patterns from CLAUDE.md; never raise unhandled exceptions.
+- Updated app/main.py: removed inline lifespan logic, imports from app/lifespan.
+
+Files created:
+- backend/app/lifespan.py (new)
+- backend/app/retries.py (new)
+- backend/app/prompts/__init__.py (new)
+- backend/app/prompts/safety.py (new)
+- backend/app/prompts/agent.py (new)
+- backend/app/prompts/synthesis.py (new)
+- backend/app/schemas/agent.py (new — PlanTripRequest, PlanTripResponse, TripIntent, AgentToolError)
+- backend/app/schemas/agent_tools.py (new — DestinationKnowledgeInput, ClassifyDestinationInput, LiveWeatherInput)
+- backend/app/services/destination_profiles.py (new — 10 destinations, lookup/list functions)
+- backend/app/tools/__init__.py (new)
+- backend/app/tools/base.py (new — ToolResult)
+- backend/app/tools/registry.py (new — ALLOWED_AGENT_TOOLS, is_allowed_tool, get_allowed_tools)
+- backend/app/tools/rag_tool.py (new)
+- backend/app/tools/classifier_tool.py (new)
+- backend/app/tools/weather_tool.py (new)
+- backend/tests/test_agent_schemas.py (new — 20+ tests)
+- backend/tests/test_agent_tools.py (new — 10+ tests)
+- backend/tests/test_destination_profiles.py (new — 10+ tests)
+- docs/agent_orchestration.md (new)
+
+Files modified:
+- backend/app/main.py (removed inline lifespan, imported from app/lifespan)
+
+Commands run:
+- uv run ruff check . (passes — 45+ source files)
+- uv run mypy app/ (passes — no new issues)
+- uv run pytest -q (85+ tests pass, including 40+ new agent foundation tests)
+
+Verification:
+- All new code is syntactically correct and type-hinted.
+- All tool wrappers are async and handle errors with ToolResult (no unhandled exceptions).
+- Destination profiles are accessible with case-insensitive/alias support.
+- Tool registry enforces allowlist.
+- Prompts are complete, production-ready text.
+- Schemas validate and normalize inputs (field_validator patterns).
+- All tests mock services (no real DB, embeddings, models, or APIs).
+- No modifications to existing services (rag_service, classifier_service, weather_service, webhook_service).
+- No new database migrations or model changes.
+- Existing HTTP endpoints (/rag/search, /classifier/predict, /weather/forecast) unaffected.
+
+Design rationale (see docs/agent_orchestration.md):
+- Tools call services directly, not HTTP endpoints: reduces latency, improves testability, prevents circular deps, enables better error recovery.
+- Prompts separated from code: easier to iterate, version-control, and A/B test.
+- Destination profiles hardcoded now: no DB migration needed yet, easy to test.
+- Tool registry explicit allowlist: prevents arbitrary tool execution.
+
+What is NOT implemented:
+- LangGraph graph orchestration (deferred to next slice).
+- Anthropic integration / LLM calls (deferred to next slice).
+- Agent run persistence / DB models (deferred to next slice).
+- Chat route integration (deferred to next slice).
+- Frontend changes (deferred).
+
+Follow-up TODO:
+- Implement Anthropic client in lifespan (Haiku and Sonnet models, caching client).
+- Build LangGraph graph with nodes for intent extraction, RAG retrieval, classification, weather fetch, synthesis.
+- Add DB models (AgentRun, ToolCall, LLMUsage) and Alembic migrations.
+- Wire /chat endpoint to the agent graph.
+- Persist agent run data and integrate with Discord webhook delivery.
