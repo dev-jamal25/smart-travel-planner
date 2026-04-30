@@ -13,7 +13,7 @@ from app.db.session import create_engine, create_session_factory
 from app.dependencies import get_session
 from app.exceptions import AuthError
 from app.logging_setup import configure_logging
-from app.routers import auth, chat, history
+from app.routers import auth, chat, history, rag
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(history.router)
+app.include_router(rag.router)
 
 
 @app.exception_handler(AuthError)

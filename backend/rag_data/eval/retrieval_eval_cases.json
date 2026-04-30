@@ -1,0 +1,37 @@
+[
+  {
+    "name": "adventure_mountains",
+    "query": "I want hiking, mountains, lakes, and outdoor adventure.",
+    "expected_destinations": ["Interlaken", "Banff"]
+  },
+  {
+    "name": "culture_history",
+    "query": "I want temples, historic districts, old architecture, and cultural sightseeing.",
+    "expected_destinations": ["Kyoto", "Istanbul"]
+  },
+  {
+    "name": "beaches_relaxation",
+    "query": "I want beaches, warm weather, and a relaxing island trip.",
+    "expected_destinations": ["Bali", "Santorini"]
+  },
+  {
+    "name": "luxury_modern_city",
+    "query": "I want luxury shopping, modern attractions, and premium hotels.",
+    "expected_destinations": ["Dubai", "Singapore"]
+  },
+  {
+    "name": "budget_history",
+    "query": "I want a budget-friendly city with history, walkable areas, and affordable food.",
+    "expected_destinations": ["Kraków", "Tbilisi"]
+  },
+  {
+    "name": "family_practical_city",
+    "query": "I am travelling with family and want safe transport, easy attractions, and a city that is simple to navigate.",
+    "expected_destinations": ["Singapore"]
+  },
+  {
+    "name": "logistics_safety",
+    "query": "I care about getting around, safety, and practical travel logistics more than sightseeing.",
+    "expected_destinations": ["Singapore", "Dubai", "Kyoto", "Istanbul"]
+  }
+]
