@@ -156,7 +156,41 @@ Three async functions that call existing services directly (not via HTTP):
 - Comprehensive error handling → structured `ToolResult`
 - No unhandled exceptions escape to caller
 
-### 10. Agent Persistence (`app/models/db.py`, `app/db/repositories/agent_runs.py`)
+### 10. Model Router (`app/agents/model_router.py`)
+
+Routes LLM calls to Haiku (mechanical work) or Sonnet (synthesis) with automatic token/cost tracking.
+
+#### Haiku Methods (Mechanical Tasks)
+- **`extract_trip_intent(message)`** — Extracts structured TripIntent from user message
+- **`rewrite_rag_query(message, intent)`** — Rewrites user query for better RAG matching
+- **`select_candidate_destination(message, retrieved_destinations)`** — Selects best destination from list
+- **`repair_tool_arguments(tool_name, invalid_payload, validation_error)`** — Fixes invalid tool arguments before execution
+
+#### Sonnet Method (Synthesis)
+- **`synthesize_final_answer(...)`** — Creates final user-facing travel plan, synthesizing RAG + classifier + weather results
+
+#### Token & Cost Tracking
+Every LLM call extracts:
+- `input_tokens`, `output_tokens` from Anthropic response
+- `cost_usd` calculated using static pricing table keyed by model name
+- `latency_ms` measured from call start to end
+
+#### Optional Persistence
+All ModelRouter methods accept optional `session: AsyncSession | None` and `run_id: UUID | None`:
+- If both provided, automatically calls `log_llm_usage()` to persist metrics to `LLMUsageLog` table
+- If either is None, still returns result normally (no persistence)
+- Does not commit inside ModelRouter (caller controls transaction)
+
+#### Settings Integration
+- Model names sourced from `Settings.haiku_model` and `Settings.sonnet_model` (never hardcoded)
+- Timeout from `Settings.anthropic_timeout_seconds`
+- Retry config: 3 attempts with exponential backoff (0.5s → 8s max)
+
+#### Dependency Injection
+- ModelRouter instantiated once in `app/lifespan.py` and stored on `app.state.model_router`
+- Exposed via `get_model_router()` dependency in `app/dependencies.py`
+
+### 11. Agent Persistence (`app/models/db.py`, `app/db/repositories/agent_runs.py`)
 
 Four new ORM models for comprehensive agent run tracking:
 
@@ -177,7 +211,7 @@ Four new ORM models for comprehensive agent run tracking:
 - `id` (UUID, PK)
 - `run_id` (UUID, FK to agent_runs, indexed)
 - `tool_name` (String, indexed) — "destination_knowledge_retrieval", "classify_destination_style", "fetch_live_weather"
-- `input_json` (JSONB, nullable) — Tool input serialized
+- `input_json` (JSON, nullable) — Tool input serialized
 - `output_summary` (Text, nullable) — Human-readable summary of output
 - `status` (String) — "ok" or "error"
 - `latency_ms` (Integer, nullable)
@@ -187,7 +221,7 @@ Four new ORM models for comprehensive agent run tracking:
 - `id` (UUID, PK)
 - `run_id` (UUID, FK, indexed)
 - `step_name` (String, indexed) — "intent_extraction", "synthesis", etc.
-- `model` (String) — Model name used (e.g., "claude-3-haiku-20240307")
+- `model` (String) — Model name used (e.g., "claude-haiku-4-5-20251001")
 - `input_tokens`, `output_tokens` (Integer, nullable)
 - `cost_usd` (Float, nullable) — Calculated cost
 - `latency_ms` (Integer, nullable)
@@ -216,23 +250,25 @@ Four new ORM models for comprehensive agent run tracking:
 - All DB functions are async
 - User scoping enforced: runs never exposed across users
 - Flush-based persistence: no session.commit() inside helpers (caller decides)
-- JSONB for flexible tool inputs/outputs and trace details
+- JSON for flexible tool inputs/outputs and trace details
 - Indexes on foreign keys + frequently-filtered columns (user_id, status, tool_name, step_name, event_type)
 
 ## What Is NOT Implemented
 
 ### ✗ LangGraph Graph
-The agent orchestration graph is not built yet. This will be added in the next slice when:
-- Anthropic model setup and cost tracking is ready
-- Chat route integration is planned
-
-### ✗ Anthropic Integration
-No LLM calls yet. The agent will call Anthropic in the next slice using:
-- Haiku for mechanical tasks (intent extraction, query rewriting, etc.)
-- Sonnet for final synthesis
+The agent orchestration graph is not built yet. This will be added in the next slice after model router is complete.
+Graph will orchestrate:
+1. Intent extraction (Haiku via ModelRouter)
+2. Query rewriting (Haiku)
+3. RAG retrieval (via destination_knowledge_retrieval tool)
+4. Destination selection (Haiku)
+5. Classification (via classify_destination_style tool)
+6. Weather fetch (via fetch_live_weather tool)
+7. Final synthesis (Sonnet via ModelRouter)
+8. Persistence to database
 
 ### ✗ Chat Route Integration
-The `/chat` endpoint is not wired to the agent yet. That will happen when the agent graph is built.
+The `/chat` endpoint is not wired to the agent yet. That will happen when the LangGraph graph is built.
 
 ### ✗ Frontend
 No changes to React frontend.
@@ -244,6 +280,7 @@ Components tested with:
 - **`test_agent_schemas.py`** — 20+ tests for request/response types and validation
 - **`test_agent_tools.py`** — 10+ tests for tool wrappers with mocked services
 - **`test_destination_profiles.py`** — 10+ tests for profile lookup and registry
+- **`test_model_router.py`** — 25+ tests for Haiku/Sonnet model calls, cost estimation, token tracking
 - **`test_agent_persistence.py`** — 15+ tests for repositories with in-memory SQLite
 
 Run tests:
@@ -291,24 +328,23 @@ The existing HTTP endpoints (`/rag/search`, `/classifier/predict`, `/weather/for
 
 ## Next Steps
 
-### Slice 2: Agent Graph & LLM Integration
-- Add Anthropic client to lifespan
-- Create LangGraph graph with state, nodes, and edges
-- Implement model router (Haiku/Sonnet selection)
-- Add DB models for AgentRun, ToolCall, LLMUsage
-- Create Alembic migrations
-- Wire `/chat` endpoint to the agent
+### Slice 1: LangGraph Agent Graph
+- Create a controlled LangGraph state graph.
+- Wire nodes for safety, intent extraction, query rewriting, RAG retrieval, destination selection, classification, weather, synthesis, and webhook delivery.
+- Use ModelRouter for Haiku/Sonnet calls.
+- Use existing tool wrappers for RAG/classifier/weather.
+- Persist tool calls, LLM usage, and trace events using the repository helpers.
 
-### Slice 3: Chat Route Integration
-- Connect the agent graph to the FastAPI `/chat` endpoint
-- Stream plan synthesis results (if beneficial)
-- Persist run data to database
-- Integrate with webhook service for Discord notifications
+### Slice 2: Chat Route Integration
+- Wire the existing `/chat` route to the agent service.
+- Return `PlanTripResponse`.
+- Keep internal cost/tool logs out of the user-facing response.
 
-### Slice 4: Observability & Dashboard
-- LangSmith tracing integration
-- Admin dashboard for run history, costs, and error rates
-- Tool performance metrics
+### Slice 3: Trace Routes and README Evidence
+- Add DB-backed trace inspection routes if time allows.
+- Enable LangSmith tracing.
+- Run one full multi-tool query.
+- Add the LangSmith screenshot and one full-query cost breakdown to README.
 
 ## References
 

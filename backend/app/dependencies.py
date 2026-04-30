@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, PyJWKClientError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.model_router import ModelRouter
 from app.config import get_settings
 from app.exceptions import AuthError
 from app.schemas.auth import CurrentUser
@@ -96,3 +97,12 @@ def get_weather_service(request: Request) -> WeatherService:
 def get_webhook_service(request: Request) -> WebhookService:
     service: WebhookService = request.app.state.webhook_service
     return service
+
+
+def get_model_router(request: Request) -> ModelRouter:
+    """Dependency to inject model router (Haiku/Sonnet).
+
+    Uses request app.state.model_router created in FastAPI lifespan.
+    """
+    router: ModelRouter = request.app.state.model_router
+    return router

@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     weather_cache_ttl_seconds: int = 600
     log_level: str = "INFO"
 
+    # Agent runtime and tracing
+    langchain_tracing_v2: bool = False
+    langchain_api_key: str | None = None
+    langchain_project: str = "smart-travel-planner"
+    max_agent_steps: int = 8
+    tool_arg_repair_attempts: int = 1
+    anthropic_timeout_seconds: int = 30
+
     @field_validator("database_url")
     @classmethod
     def ensure_async_scheme(cls, v: str) -> str:

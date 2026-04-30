@@ -10,6 +10,7 @@ import joblib
 from fastapi import FastAPI
 from sentence_transformers import SentenceTransformer
 
+from app.agents.model_router import ModelRouter
 from app.config import BACKEND_DIR, get_settings
 from app.db.session import create_engine, create_session_factory
 from app.logging_setup import configure_logging
@@ -61,6 +62,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # --- WEBHOOK SERVICE ---
     app.state.webhook_service = WebhookService(settings=settings)
     logger.info("Webhook service initialized")
+
+    # --- MODEL ROUTER (Haiku/Sonnet for agent) ---
+    app.state.model_router = ModelRouter(settings=settings)
+    logger.info("Model router initialized: Haiku=%s, Sonnet=%s", settings.haiku_model, settings.sonnet_model)
 
     # --- DATABASE ---
     engine = create_engine()

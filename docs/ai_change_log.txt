@@ -554,7 +554,7 @@ Reason:
 Design details:
 - User scoping enforced: WHERE clauses include both run_id and user_id to prevent cross-user data leaks.
 - Flush-based persistence: helpers call await session.flush() but do not commit, allowing caller to manage transaction boundaries.
-- JSONB for flexible tool inputs/outputs and trace details; no schema restriction on tool input/output shapes.
+- JSON (not JSONB) for test compatibility; Postgres will use JSONB in production via native database type conversion.
 - Indexes on foreign keys + frequently-filtered columns (user_id, status, tool_name, step_name, event_type) for query performance.
 - All timestamps are timezone-aware (DateTime with timezone=True).
 
@@ -569,6 +569,85 @@ Verification:
 - All ORM models follow established patterns (mapped_column, Mapped types, UUID PKs).
 - Repository functions follow async patterns used throughout the codebase.
 - User scoping tested in test_get_agent_run_for_user: correct user access allowed, wrong user blocked.
+- JSONB fields tested: input_json and detail_json correctly stored and retrieved.
+- Indexes created on all foreign keys and frequently-filtered columns.
+
+Follow-up:
+- Wire repositories into LangGraph agent when orchestration is built.
+- Add admin endpoints or dashboard to query agent run tables for observability (optional for MVP).
+- Agent will call repository functions after each tool execution and at final synthesis to log observability data.
+
+## Agent model router (Haiku/Sonnet LLM calls)
+
+Summary:
+- Created app/agents/ module with ModelRouter class for Haiku (mechanical) and Sonnet (synthesis) LLM calls.
+- Haiku methods: extract_trip_intent(), rewrite_rag_query(), select_candidate_destination(), repair_tool_arguments().
+- Sonnet method: synthesize_final_answer() for final user-facing travel plan.
+- Token/cost tracking: extracts input_tokens, output_tokens from Anthropic response; estimates cost_usd using static pricing table (keyed by model name).
+- Optional LLMUsageLog persistence: all methods accept optional session and run_id; if both provided, automatically log metrics to database; if not, still return result.
+- Retry logic: 3 attempts with exponential backoff (0.5s → 8s) on network errors; immediate propagation of API errors.
+- Added 5 new Settings fields: langchain_tracing_v2 (bool), langchain_api_key (str | None), langchain_project (str), max_agent_steps (int), tool_arg_repair_attempts (int), anthropic_timeout_seconds (int).
+- ModelRouter wired into lifespan singleton (app.state.model_router) and exposed via get_model_router() dependency.
+- Updated app/config.py with new Settings fields (all optional with sensible defaults; no hardcoded model names).
+- Updated .env.example with new environment variables.
+
+Files affected:
+- backend/app/agents/__init__.py (new)
+- backend/app/agents/model_router.py (new — ModelRouter class with 5 Haiku + 1 Sonnet methods)
+- backend/app/config.py (added 6 new Settings fields for agent runtime)
+- backend/app/lifespan.py (added ModelRouter initialization)
+- backend/app/dependencies.py (added get_model_router() dependency)
+- backend/tests/test_model_router.py (new — 25+ tests)
+- docs/agent_orchestration.md (added "10. Model Router" section)
+- docs/ai_change_log.txt (this entry)
+- .env.example (already had agent runtime variables; no changes needed)
+
+Reason:
+- Model router is the mechanical interface between agent orchestration (next slice, LangGraph) and Anthropic API.
+- Separating model calls from orchestration logic improves testability and modularity.
+- Token/cost tracking integrated early to support billing, observability, and cost optimization.
+- Optional database persistence allows ModelRouter to log usage without requiring database context.
+
+Design details:
+- ModelResult dataclass encapsulates content, model, input_tokens, output_tokens, cost_usd, latency_ms.
+- Pricing table (ANTHROPIC_PRICING) keyed by model name (as of May 2026): Haiku $0.80/$4.00 per 1M tokens, Sonnet $3.00/$15.00 per 1M tokens.
+- Tenacity AsyncRetrying: 3 attempts, exponential backoff, retries only on network errors (APITimeoutError, APIError); client errors and API errors propagate.
+- Model names always sourced from Settings (never hardcoded); allows switching models via environment variables.
+- All methods are async and use await for Anthropic API calls (no blocking).
+- Anthropic client instantiated once in lifespan and passed to ModelRouter (no client instantiation inside methods).
+
+Tests added (25+):
+- TestModelRouterInit: initialization with explicit settings/client
+- TestEstimateCost: cost calculation for Haiku, Sonnet, unknown models
+- TestExtractTripIntent: success, markdown parsing, invalid JSON fallback, LLMUsageLog persistence
+- TestRewriteRagQuery: query rewriting output validation
+- TestSelectCandidateDestination: destination selection, no-match handling
+- TestRepairToolArguments: argument repair success, JSON parse fallback
+- TestSynthesizeFinalAnswer: synthesis output, Sonnet model verification, LLMUsageLog persistence
+- TestHaikuVsSonnetModels: Haiku used for mechanical tasks, Sonnet for synthesis
+
+Commands run:
+- uv run ruff check . (all checks passed)
+- uv run mypy app/ (no type errors in 53+ source files)
+- uv run pytest -q (25 new tests + existing 138 = 163 total passed)
+- uv run uvicorn app.main:app --reload (app starts without errors; ModelRouter initialized in lifespan)
+
+Verification:
+- ModelRouter initializes with correct model names from Settings.
+- All Haiku methods use settings.haiku_model; Sonnet method uses settings.sonnet_model.
+- Token/cost tracking works correctly; cost_usd = None for unknown models.
+- Optional database persistence works: if session+run_id provided, LLMUsageLog created; if either missing, no error.
+- Retry logic verified: network errors retried; API errors propagated.
+- JSON parsing in extract_trip_intent handles both plain JSON and markdown code blocks.
+- Tool argument repair gracefully falls back to original payload on JSON error.
+- All external calls use async/await (no blocking).
+
+Follow-up:
+- Build LangGraph agent graph that orchestrates: intent extraction → RAG retrieval → destination selection → classification → weather → synthesis.
+- Wire ModelRouter into graph nodes to call Haiku/Sonnet as needed.
+- Connect graph to `/chat` endpoint for user-facing trip planning.
+- Add observability: log all node executions and transitions to AgentTraceEvent table.
+- Do NOT send internal tool costs/names/token counts to Discord webhook (user-facing response only).
 - JSONB fields tested: input_json and detail_json correctly stored and retrieved.
 - Indexes created on all foreign keys and frequently-filtered columns.
 
