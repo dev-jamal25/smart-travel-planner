@@ -15,6 +15,7 @@ from app.schemas.auth import CurrentUser
 from app.services.classifier_service import ClassifierService
 from app.services.rag_service import RagService
 from app.services.weather_service import WeatherService
+from app.services.webhook_service import WebhookService
 
 # Security scheme for Swagger auth display
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -89,4 +90,9 @@ def get_rag_service(request: Request) -> RagService:
 
 def get_weather_service(request: Request) -> WeatherService:
     service: WeatherService = request.app.state.weather_service
+    return service
+
+
+def get_webhook_service(request: Request) -> WebhookService:
+    service: WebhookService = request.app.state.webhook_service
     return service

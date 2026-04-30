@@ -412,3 +412,104 @@ Follow-up TODO:
   on failure so the agent handles it gracefully instead of crashing the run.
 - Add weather_code → human-readable description mapping for richer agent synthesis.
 - Add auth (Depends(get_current_user)) to /weather/forecast before production if needed.
+
+## Discord webhook delivery
+
+Summary:
+- Added Discord webhook delivery service that sends final trip plans to a configured Discord
+  channel via async HTTP with timeout, retry, and failure isolation.
+- WebhookTripPlanRequest / WebhookDeliveryResponse Pydantic schemas added to app/schemas/webhook.py.
+- WebhookService created as a lifespan singleton (one httpx.AsyncClient per process) in
+  app/services/webhook_service.py.
+- Tenacity AsyncRetrying: 3 attempts, exponential backoff 0.5 s → 8 s, retries on
+  httpx.RequestError and HTTP 5xx; HTTP 4xx treated as non-retryable client errors.
+- send_trip_plan() never raises to callers — always returns WebhookDeliveryResponse.
+- Discord content message includes: title, user query, destination, trip plan (truncated at
+  1 400 chars), tools used, estimated cost. Full content clamped to Discord 2 000-char limit.
+- Webhook URL sourced from Settings.webhook_url only; never logged.
+- POST /webhook/test-discord endpoint: protected with get_current_user, always returns HTTP 200,
+  delivered=false on Discord failure (failure isolation demonstrated).
+- get_webhook_service() dependency added to app/dependencies.py.
+- WebhookService created and closed in FastAPI lifespan in app/main.py.
+- docs/discord_webhook.md added: payload spec, timeout/retry, failure isolation, agent integration
+  path, manual Swagger test steps.
+
+Files changed:
+- backend/app/schemas/webhook.py (new)
+- backend/app/services/webhook_service.py (new)
+- backend/app/routers/webhook.py (new)
+- backend/app/dependencies.py (added get_webhook_service, imported WebhookService)
+- backend/app/main.py (lifespan WebhookService create/close, webhook router registered)
+- backend/tests/test_webhook.py (new — 14 tests)
+- docs/discord_webhook.md (new)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (14 total):
+- test_schema_accepts_valid_payload
+- test_schema_accepts_no_optional_fields
+- test_schema_rejects_empty_user_query
+- test_schema_rejects_whitespace_user_query
+- test_schema_rejects_empty_trip_plan
+- test_schema_rejects_negative_cost
+- test_schema_accepts_zero_cost
+- test_service_sends_correct_discord_payload
+- test_service_returns_delivered_false_on_network_failure
+- test_service_returns_delivered_false_on_4xx
+- test_service_does_not_expose_webhook_url_in_response
+- test_endpoint_returns_200_on_success
+- test_endpoint_returns_200_with_delivered_false_on_discord_failure
+- test_endpoint_returns_401_without_auth
+- test_endpoint_returns_422_on_invalid_body
+
+Commands run:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes — 36 source files, no issues)
+- uv run pytest -q (78 tests pass, 14 new)
+
+Follow-up TODO:
+- Wire WebhookService into LangGraph agent run: after Sonnet final synthesis, call
+  send_trip_plan() with the completed plan and persist delivered status on AgentRun.
+
+## Webhook user-facing data only refactor
+
+Summary:
+- Removed internal fields (tools_used, cost_usd) from WebhookTripPlanRequest schema.
+- Discord webhook now sends only user-facing information: user query, destination, and trip plan.
+- Internal data (tool names, LLM costs, token counts) will be stored in database/logs during agent orchestration, not sent to Discord.
+- Simplifies webhook payload, focuses Discord message on end-user content.
+
+Files affected:
+- backend/app/schemas/webhook.py (removed tools_used and cost_usd fields)
+- backend/app/services/webhook_service.py (removed code to include tools_used and cost_usd in Discord message)
+- backend/tests/test_webhook.py (updated schema tests, removed cost validation tests, added test for schema rejection of internal fields)
+- docs/discord_webhook.md (updated payload section, added "Internal Data Not Sent to Discord" explanation, updated example request)
+- docs/ai_change_log.txt (this entry)
+
+Reason:
+- Cleaner separation of concerns: Discord gets user-facing content, DB/logs get internal observability data.
+- Reduced Discord message complexity.
+- Prepares for agent integration: agent will construct requests with only public fields.
+- Aligns with CLAUDE.md guidance: tool failures and internal details do not break user-facing response.
+
+Commands run:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (schema and service tests updated, all pass)
+
+Tests updated:
+- test_schema_accepts_valid_payload: removed cost_usd and tools_used assertions
+- test_schema_accepts_no_optional_fields → test_schema_accepts_minimal_fields_only: removed cost/tools checks
+- Removed test_schema_rejects_negative_cost (no cost field)
+- Removed test_schema_accepts_zero_cost (no cost field)
+- Added test_discord_payload_excludes_internal_fields: confirms schema rejects tools_used and cost_usd
+
+Verification:
+- Webhook endpoint still protected with HTTPBearer auth.
+- Failure isolation unchanged: webhook failures do not break API response.
+- Retry/timeout/backoff behavior unchanged.
+- Discord message format updated but still human-readable.
+
+Follow-up:
+- Agent run will construct WebhookTripPlanRequest with only (user_query, destination, trip_plan).
+- Tools used and costs tracked separately in AgentRun and tool call tables.
+- Admin dashboard can query agent run tables for observability.

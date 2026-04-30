@@ -14,8 +14,9 @@ from app.db.session import create_engine, create_session_factory
 from app.dependencies import get_session
 from app.exceptions import AuthError
 from app.logging_setup import configure_logging
-from app.routers import auth, chat, classifier, history, rag, weather
+from app.routers import auth, chat, classifier, history, rag, weather, webhook
 from app.services.weather_service import WeatherService
+from app.services.webhook_service import WebhookService
 
 logger = logging.getLogger(__name__)
 
@@ -42,12 +43,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.classifier = None
 
     app.state.weather_service = WeatherService(settings=settings)
+    app.state.webhook_service = WebhookService(settings=settings)
 
     engine = create_engine()
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
     yield
     await app.state.weather_service.close()
+    await app.state.webhook_service.close()
     await app.state.engine.dispose()
 
 
@@ -59,6 +62,7 @@ app.include_router(classifier.router)
 app.include_router(history.router)
 app.include_router(rag.router)
 app.include_router(weather.router)
+app.include_router(webhook.router)
 
 
 @app.exception_handler(AuthError)
