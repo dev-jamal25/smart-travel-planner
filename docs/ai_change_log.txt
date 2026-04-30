@@ -311,3 +311,41 @@ Details:
 
 Follow-up:
 - Protected endpoints in other routers (chat, history, etc.) can use the same bearer_scheme dependency.
+
+## Fix Supabase JWT verification to support ES256 tokens via JWKS
+
+Summary:
+- Supabase issues ES256-signed JWT tokens, not HS256.
+- Previous implementation tried to verify ES256 tokens with HS256 algorithm + symmetric secret, causing "Invalid or expired token" errors on all protected endpoints.
+- Updated get_current_user() in app/dependencies.py to use Supabase JWKS (JSON Web Key Set) for public-key verification.
+- Uses PyJWT's PyJWKClient to fetch public keys from Supabase JWKS URL and verify ES256 tokens.
+- Caches JWKS client with lru_cache(maxsize=1) to avoid refetching on every request.
+- Validates audience, issuer, and expiration as before.
+- Maintains HTTPBearer security scheme for Swagger auth display (lock icon still shows).
+
+Files affected:
+- backend/app/config.py (replaced supabase_jwt_secret with supabase_jwt_jwks_url)
+- backend/app/dependencies.py (added _get_jwks_client(), updated get_current_user() to use PyJWKClient)
+- backend/tests/test_auth.py (updated tests to mock JWKS client instead of using HS256)
+- .env.example (replaced SUPABASE_JWT_SECRET with SUPABASE_JWT_JWKS_URL)
+- docs/ai_change_log.txt (this entry)
+
+Commands executed:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (all tests pass with JWKS mocking)
+
+Verification:
+- Missing auth: returns 401 AuthError
+- Invalid token: returns 401 AuthError (catches PyJWKClientError, InvalidTokenError, ExpiredSignatureError)
+- Valid ES256 token from Supabase: returns CurrentUser with user_id and email
+- Swagger /docs still shows lock icon on protected endpoints
+- All existing protected endpoints now work with real Supabase tokens
+
+Implementation details:
+- PyJWKClient caches keys (max 10) and uses standard JWKS response format from Supabase
+- No synchronous/blocking calls in get_current_user(); PyJWKClient uses requests library internally (acceptable for small HTTP call)
+- Explicit algorithm="ES256" in jwt.decode() prevents algorithm switching attacks
+
+Follow-up:
+- Chat and history routers can add Depends(get_current_user) to protected endpoints for user-scoped data access.

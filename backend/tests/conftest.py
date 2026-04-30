@@ -2,7 +2,7 @@ import os
 from uuid import UUID
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("SUPABASE_JWT_SECRET", "test-secret-very-long-key-for-hs256-algorithm-test")
+os.environ.setdefault("SUPABASE_JWT_JWKS_URL", "https://test.supabase.co/auth/v1/.well-known/jwks.json")
 os.environ.setdefault("SUPABASE_JWT_ISSUER", "https://test.supabase.co/auth/v1")
 os.environ.setdefault("SUPABASE_JWT_AUDIENCE", "authenticated")
 os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")

@@ -276,24 +276,37 @@ Every agent run must be scoped to the logged-in user.
 
 ### 6. Auth Strategy
 
-This project uses Supabase JWT verification.
+This project uses Supabase JWT verification with **JWKS public-key validation**.
 
 Rules:
 - Verify Bearer tokens using PyJWT.
-- Use HS256 symmetric verification.
+- Use FastAPI `HTTPBearer` so protected endpoints show the Swagger auth lock.
+- The current Supabase project issues `ES256` access tokens.
+- Because `ES256` is asymmetric, verify tokens using Supabase JWKS, not the old HS256 shared secret.
 - Use these Settings fields:
-  - `supabase_jwt_secret`
+  - `supabase_jwt_jwks_url`
   - `supabase_jwt_audience`
   - `supabase_jwt_issuer`
   - `supabase_anon_key`
   - `supabase_service_role_key`
-- Do not use JWKS.
-- Do not add `SUPABASE_JWT_JWKS_URL`.
+- Do not hardcode the Supabase project ref or JWKS URL outside Settings.
+- Cache JWKS/public-key lookup where appropriate so the app does not fetch JWKS on every request.
+- Validate:
+  - token signature
+  - `aud`
+  - `iss`
+  - `exp`
 - Return a `CurrentUser` object with:
   - `user_id: UUID`
   - `email: str`
+- Missing token must return 401.
+- Invalid or expired token must return 401.
 - Protected routes must use `Depends(get_current_user)`.
 - Every agent run must be scoped to the current user.
+
+Legacy note:
+- Do not use HS256 verification for this project unless Supabase is explicitly reconfigured to issue HS256 tokens.
+- `supabase_jwt_secret` is not used for the current ES256/JWKS auth flow.
 
 ### 7. React Frontend
 

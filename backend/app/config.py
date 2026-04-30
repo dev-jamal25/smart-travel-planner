@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Required
     database_url: str
-    supabase_jwt_secret: str
+    supabase_jwt_jwks_url: str
     supabase_jwt_audience: str = "authenticated"
     supabase_jwt_issuer: str
     supabase_anon_key: str

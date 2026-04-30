@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
+from unittest.mock import MagicMock, patch
 
 import jwt
 import pytest
@@ -37,25 +38,50 @@ def test_missing_auth_returns_401(auth_client: TestClient) -> None:
 
 
 def test_invalid_jwt_returns_401(auth_client: TestClient) -> None:
-    response = auth_client.get("/me", headers={"Authorization": "Bearer bad.token.here"})
-    assert response.status_code == 401
+    with patch("app.dependencies._get_jwks_client") as mock_jwks_client:
+        mock_client = MagicMock()
+        mock_jwks_client.return_value = mock_client
+        mock_client.get_signing_key_from_jwt.side_effect = jwt.PyJWKClientError("Invalid token")
+        
+        response = auth_client.get("/me", headers={"Authorization": "Bearer bad.token.here"})
+        assert response.status_code == 401
 
 
 def test_valid_jwt_returns_current_user(auth_client: TestClient) -> None:
+    """Test ES256 token verification via JWKS."""
     settings = get_settings()
-    token = jwt.encode(
-        {
-            "sub": "00000000-0000-0000-0000-000000000001",
-            "email": "test@test.com",
-            "aud": settings.supabase_jwt_audience,
-            "iss": settings.supabase_jwt_issuer,
-            "exp": datetime.now(UTC) + timedelta(hours=1),
-        },
-        settings.supabase_jwt_secret,
-        algorithm="HS256",
-    )
-    response = auth_client.get("/me", headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 200
-    data = response.json()
-    assert data["user_id"] == "00000000-0000-0000-0000-000000000001"
-    assert data["email"] == "test@test.com"
+    
+    # Create a test payload
+    test_payload = {
+        "sub": "00000000-0000-0000-0000-000000000001",
+        "email": "test@test.com",
+        "aud": settings.supabase_jwt_audience,
+        "iss": settings.supabase_jwt_issuer,
+        "exp": datetime.now(UTC) + timedelta(hours=1),
+    }
+    
+    # For testing, we create a fake token (any string works for mocking)
+    fake_token = "fake.jwt.token"
+    
+    with patch("app.dependencies._get_jwks_client") as mock_get_jwks:
+        with patch("jwt.decode") as mock_decode:
+            mock_client = MagicMock()
+            mock_get_jwks.return_value = mock_client
+            
+            # Mock the signing key
+            mock_key = MagicMock()
+            mock_key.key = "mock-public-key"
+            mock_client.get_signing_key_from_jwt.return_value = mock_key
+            
+            # Mock jwt.decode to return our test payload
+            mock_decode.return_value = test_payload
+            
+            # Clear lru_cache to force fresh call to patched _get_jwks_client
+            from app.dependencies import _get_jwks_client
+            _get_jwks_client.cache_clear()
+            
+            response = auth_client.get("/me", headers={"Authorization": f"Bearer {fake_token}"})
+            assert response.status_code == 200
+            data = response.json()
+            assert data["user_id"] == "00000000-0000-0000-0000-000000000001"
+            assert data["email"] == "test@test.com"

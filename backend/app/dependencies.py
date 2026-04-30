@@ -1,11 +1,12 @@
 from collections.abc import AsyncGenerator
+from functools import lru_cache
 from typing import Annotated
 from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, PyJWKClientError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -18,6 +19,20 @@ from app.services.rag_service import RagService
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+@lru_cache(maxsize=1)
+def _get_jwks_client() -> jwt.PyJWKClient:
+    """Get cached JWKS client for token verification.
+    
+    Cached because JWKS URL is static per Supabase project.
+    """
+    settings = get_settings()
+    return jwt.PyJWKClient(
+        uri=settings.supabase_jwt_jwks_url,
+        cache_keys=True,
+        max_cached_keys=10,
+    )
+
+
 async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
     async with request.app.state.session_factory() as session:
         yield session
@@ -26,8 +41,9 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> CurrentUser:
-    """Verify Supabase JWT token and return current user.
+    """Verify Supabase JWT token (ES256) and return current user.
 
+    Uses JWKS for public-key verification and validates audience, issuer, expiration.
     Uses FastAPI HTTPBearer security scheme for Swagger auth display.
     """
     if credentials is None:
@@ -35,15 +51,23 @@ async def get_current_user(
 
     token = credentials.credentials
     settings = get_settings()
+    
     try:
+        # Get the signing key from JWKS
+        jwks_client = _get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        
+        # Decode and verify token with public key
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            signing_key.key,
+            algorithms=["ES256"],
             audience=settings.supabase_jwt_audience,
+            issuer=settings.supabase_jwt_issuer,
         )
-    except (ExpiredSignatureError, InvalidTokenError) as err:
+    except (ExpiredSignatureError, InvalidTokenError, PyJWKClientError) as err:
         raise AuthError("Invalid or expired token") from err
+    
     return CurrentUser(user_id=UUID(payload["sub"]), email=payload.get("email", ""))
 
 
