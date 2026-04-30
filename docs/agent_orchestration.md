@@ -326,14 +326,86 @@ The existing HTTP endpoints (`/rag/search`, `/classifier/predict`, `/weather/for
 - Easy to test (no DB dependency)
 - Will migrate to DB when more destinations are added
 
+## LangGraph Controlled Graph
+
+### Node Order
+
+```
+START
+  → extract_intent          (Haiku: TripIntent from user message)
+  → rewrite_rag_query       (Haiku: optimise query for vector search)
+  → retrieve_knowledge      (RAG tool: destination_knowledge_retrieval)
+  → select_destination      (Haiku: pick best candidate from RAG results)
+  → classify_destination    (ML tool: classify_destination_style)
+  → fetch_weather           (Weather tool: fetch_live_weather)
+  → synthesize_answer       (Sonnet: final travel plan)
+  → deliver_webhook         (Discord: send plan to configured webhook)
+  → END
+```
+
+### Why This Is Not ReAct
+
+A ReAct agent lets the LLM decide at runtime which tools to call and in what
+order.  This graph does the opposite: every node is explicit, every edge is
+hardcoded, and the LLM can only produce text — it never names a tool.
+
+The controlled graph guarantees:
+- The three tools always fire in the same order (RAG → classifier → weather).
+- The LLM cannot invent a tool name not in `app/tools/registry.py`.
+- Tool failure never crashes the graph — nodes return `ToolResult.fail()` and
+  the graph continues to synthesis, which explains missing evidence.
+- Token/cost behaviour is deterministic and observable.
+
+### How the Graph Satisfies the Requirements
+
+| Requirement | How it is met |
+|---|---|
+| 3 tools | Explicit nodes call `destination_knowledge_retrieval`, `classify_destination_style`, `fetch_live_weather` |
+| Pydantic input validation | Each tool node builds a Pydantic schema (`DestinationKnowledgeInput`, `ClassifyDestinationInput`, `LiveWeatherInput`) before calling the tool wrapper |
+| Explicit tool allowlist | Tools are called directly by name, never via an LLM tool-call API; `app/tools/registry.py` defines `ALLOWED_AGENT_TOOLS` |
+| Two-model routing | Haiku for `extract_intent`, `rewrite_rag_query`, `select_destination`; Sonnet for `synthesize_answer` |
+| Synthesis across RAG/classifier/weather | `synthesize_answer` node combines all three tool outputs and passes them to `ModelRouter.synthesize_final_answer()` (Sonnet), which explains tensions between sources |
+| Persistence | `log_tool_call` after every tool, `log_trace_event` at key nodes, `create_agent_run` / `mark_agent_run_completed` / `mark_agent_run_failed` in `AgentService` |
+| Webhook delivery | `deliver_webhook` node calls `WebhookService.send_trip_plan()`; failure is isolated and does not raise |
+
+### Key Files
+
+| File | Responsibility |
+|---|---|
+| `app/agents/state.py` | `AgentGraphState` TypedDict flowing through the graph |
+| `app/agents/graph.py` | `build_travel_graph()` — assembles and compiles the StateGraph |
+| `app/services/agent_service.py` | `AgentService.plan_trip()` — creates `AgentRun`, invokes graph, marks completed/failed, commits |
+| `app/dependencies.py` | `get_agent_service()` — wires per-request services into `AgentService` |
+
+### Session and Transaction Boundary
+
+- Repository helpers (`log_tool_call`, `log_trace_event`, etc.) call `flush()` only — they never commit.
+- `AgentService.plan_trip()` calls `session.commit()` exactly once at the service boundary (success or failure).
+- Graph nodes share the same `AsyncSession` via `state["session"]`.
+
+### Tool Failure Strategy
+
+- If a tool node raises an unhandled exception, the `ToolResult` from the
+  tool wrapper catches it and returns `ToolResult.fail(...)`.
+- The graph continues to the next node; the failing tool's error text is
+  appended to `state["errors"]`.
+- `synthesize_answer` checks each tool result and substitutes a plain-language
+  "unavailable" string when a tool failed, so Sonnet can still produce a
+  coherent (if partial) plan.
+- Webhook failure is fully isolated: `WebhookService.send_trip_plan()` never
+  raises; the graph always reaches `END`.
+
 ## Next Steps
 
-### Slice 1: LangGraph Agent Graph
-- Create a controlled LangGraph state graph.
-- Wire nodes for safety, intent extraction, query rewriting, RAG retrieval, destination selection, classification, weather, synthesis, and webhook delivery.
-- Use ModelRouter for Haiku/Sonnet calls.
-- Use existing tool wrappers for RAG/classifier/weather.
-- Persist tool calls, LLM usage, and trace events using the repository helpers.
+### Slice 2: Chat Route Integration
+- Wire the existing `/chat` route to `AgentService`.
+- Return `PlanTripResponse`.
+- Keep internal cost/tool logs out of the user-facing response.
+
+### Slice 3: Trace Routes and README Evidence
+- Add DB-backed trace inspection routes if time allows.
+- Run one full multi-tool query.
+- Add a cost breakdown screenshot to README.
 
 ### Slice 2: Chat Route Integration
 - Wire the existing `/chat` route to the agent service.

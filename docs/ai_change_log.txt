@@ -1,5 +1,66 @@
 # AI Change Log
 
+## LangGraph controlled agent graph
+
+Summary:
+- Built a controlled LangGraph StateGraph for travel planning; NOT a ReAct agent.
+- Added AgentGraphState TypedDict (app/agents/state.py) with all fields flowing
+  through the graph: run_id, user_id, user_query, intent, rewritten_query,
+  rag_result, retrieved_destinations, selected_destination, classifier_result,
+  weather_result, final_answer, webhook_delivered, webhook_status_code, errors,
+  total_cost_usd, session (runtime-only).
+- Added build_travel_graph() in app/agents/graph.py: assembles 8 explicit nodes
+  with hardcoded edges; all node functions are closures capturing service
+  singletons so the LLM never names or selects tools.
+- Haiku nodes: extract_intent, rewrite_rag_query, select_destination.
+- Sonnet node: synthesize_answer (combines RAG + classifier + weather and
+  explains any tool failures rather than hiding them).
+- Tool nodes: retrieve_knowledge (RAG), classify_destination (ML classifier),
+  fetch_weather (Open-Meteo via WeatherService).
+- deliver_webhook node: sends final plan to Discord; failure is isolated.
+- After each tool call: log_tool_call (tool_name, input_json, output_summary,
+  status, latency_ms). At key nodes: log_trace_event.
+- Added AgentService (app/services/agent_service.py): creates AgentRun at
+  start, invokes graph, marks completed/failed, commits once at service boundary.
+- Added get_agent_service() dependency in app/dependencies.py (per-request).
+- No lifespan changes: all required singletons already initialised.
+- Added docs/agent_orchestration.md "LangGraph Controlled Graph" section.
+- LangGraph already in pyproject.toml; no new dependencies.
+
+Files created:
+- backend/app/agents/state.py (AgentGraphState)
+- backend/app/agents/graph.py (build_travel_graph)
+- backend/app/services/agent_service.py (AgentService)
+- backend/tests/test_agent_graph.py (9 tests)
+
+Files modified:
+- backend/app/dependencies.py (added get_agent_service)
+- docs/agent_orchestration.md (added LangGraph Controlled Graph section)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (9):
+- test_plan_trip_happy_path: all three tools fire, final answer returned
+- test_haiku_used_before_sonnet: Haiku calls precede Sonnet synthesis
+- test_rag_tool_failure_does_not_crash: graph continues on RAG error
+- test_classifier_failure_does_not_crash: graph continues on classifier error
+- test_weather_failure_does_not_crash: graph continues on weather error
+- test_webhook_failure_does_not_fail_response: delivered=False, no raise
+- test_tool_calls_are_logged: all 3 tool names appear in log_tool_call calls
+- test_agent_run_marked_completed_on_success: mark_agent_run_completed called
+- test_agent_run_marked_failed_on_unhandled_error: mark_agent_run_failed called
+- test_final_response_excludes_internal_fields: no tools/tokens/cost in response
+
+Commands to run:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+- uv run uvicorn app.main:app --reload
+
+Follow-up:
+- Wire /chat route to AgentService (Slice 2).
+- Add trace inspection endpoints (Slice 3).
+- Add LangSmith tracing if needed.
+
 ## Foundation setup
 
 Summary:

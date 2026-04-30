@@ -13,6 +13,7 @@ from app.agents.model_router import ModelRouter
 from app.config import get_settings
 from app.exceptions import AuthError
 from app.schemas.auth import CurrentUser
+from app.services.agent_service import AgentService
 from app.services.classifier_service import ClassifierService
 from app.services.rag_service import RagService
 from app.services.weather_service import WeatherService
@@ -106,3 +107,19 @@ def get_model_router(request: Request) -> ModelRouter:
     """
     router: ModelRouter = request.app.state.model_router
     return router
+
+
+def get_agent_service(request: Request) -> AgentService:
+    """Dependency to inject AgentService.
+
+    Creates a fresh AgentService per request (rag_service and
+    classifier_service are per-request wrappers; the underlying singletons
+    live on app.state).
+    """
+    return AgentService(
+        model_router=get_model_router(request),
+        rag_service=get_rag_service(request),
+        classifier_service=get_classifier_service(request),
+        weather_service=get_weather_service(request),
+        webhook_service=get_webhook_service(request),
+    )
