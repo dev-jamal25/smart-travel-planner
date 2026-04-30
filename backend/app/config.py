@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     webhook_url: str
 
     # Optional with defaults
+    classifier_model_path: str = "models/final_travel_style_pipeline.joblib"
     weather_api_url: str = "https://api.open-meteo.com/v1/forecast"
     haiku_model: str = "claude-haiku-4-5-20251001"
     sonnet_model: str = "claude-sonnet-4-6"

@@ -62,7 +62,7 @@ module = ["app.schemas.*", "app.tools.*"]
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*"]
+module = ["pgvector.*", "joblib.*", "pandas.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

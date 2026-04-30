@@ -4,18 +4,20 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+import joblib
 from fastapi import Depends, FastAPI, Request, Response
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import BACKEND_DIR, get_settings
 from app.db.session import create_engine, create_session_factory
 from app.dependencies import get_session
 from app.exceptions import AuthError
 from app.logging_setup import configure_logging
-from app.routers import auth, chat, history, rag
+from app.routers import auth, chat, classifier, history, rag
 
 logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -24,8 +26,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
 
     configure_logging()
-    # TODO: load classifier here
-    app.state.embedder = await asyncio.to_thread(SentenceTransformer, get_settings().embedding_model)
+    settings = get_settings()
+
+    app.state.embedder = await asyncio.to_thread(SentenceTransformer, settings.embedding_model)
+
+    model_path = BACKEND_DIR / settings.classifier_model_path
+    try:
+        app.state.classifier = await asyncio.to_thread(joblib.load, model_path)
+        logger.info("Classifier loaded from %s", model_path)
+    except Exception:
+        logger.warning(
+            "Classifier model not found at %s — /classifier/predict will return 503", model_path
+        )
+        app.state.classifier = None
+
     engine = create_engine()
     app.state.engine = engine
     app.state.session_factory = create_session_factory(engine)
@@ -37,6 +51,7 @@ app = FastAPI(lifespan=lifespan)
 
 app.include_router(auth.router)
 app.include_router(chat.router)
+app.include_router(classifier.router)
 app.include_router(history.router)
 app.include_router(rag.router)
 
@@ -56,7 +71,7 @@ async def healthz(
     try:
         await session.execute(text("SELECT 1"))
         return {"status": "ok", "db": "connected"}
-    
+
     except Exception:
         logger.exception("Health check database connection failed")
 

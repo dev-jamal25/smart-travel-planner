@@ -203,6 +203,8 @@ Follow-up:
 
 ## RAG search input normalization
 
+
+
 Summary:
 - Added Pydantic v2 field_validator to RagSearchRequest.destination_filter.
 - Normalizes common no-filter values ("none", "null", "all", "", whitespace-only) to None (case-insensitive).
@@ -228,3 +230,84 @@ Verification:
 
 Follow-up:
 - No dependencies on this change; can proceed with agent integration.
+
+## Classifier runtime service
+
+Summary:
+- Wired the pre-trained travel-style classifier (backend/models/final_travel_style_pipeline.joblib) into the
+  FastAPI runtime without retraining or importing train_classifier.py.
+- Classifier is loaded once in FastAPI lifespan via asyncio.to_thread(joblib.load, ...) and stored on
+  app.state.classifier. Failure is graceful: logs a warning and sets state to None.
+- Added Settings.classifier_model_path (default: "models/final_travel_style_pipeline.joblib") resolved
+  relative to BACKEND_DIR so the path is never hardcoded.
+- ClassifierService.predict() builds a single-row pandas DataFrame with exact training column names
+  (Country, Continent, Type, Avg Cost (USD/day), Best Season, Avg Rating, Annual Visitors (M), UNESCO Site),
+  calls model.predict(), and returns max predict_proba confidence when available.
+- UNESCO Site bool → "Yes"/"No" conversion handled in the service layer.
+- get_classifier_service() dependency retrieves app.state.classifier and wraps it; returns HTTP 503 if None.
+- POST /classifier/predict requires auth (get_current_user) and returns ClassifierPredictionResponse.
+- Route is async def; sklearn predict runs inline (single-row, lightweight).
+
+Files changed:
+- backend/app/config.py (added classifier_model_path field)
+- backend/app/schemas/classifier.py (new — ClassifierPredictionRequest, ClassifierPredictionResponse)
+- backend/app/services/classifier_service.py (new — ClassifierService)
+- backend/app/dependencies.py (replaced get_classifier() stub with get_classifier_service())
+- backend/app/routers/classifier.py (new — POST /classifier/predict)
+- backend/app/main.py (lifespan classifier load, registered classifier router)
+- backend/tests/test_classifier.py (new — 13 tests)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (13 total):
+- test_schema_accepts_valid_input
+- test_schema_rejects_negative_cost
+- test_schema_rejects_rating_above_5
+- test_schema_rejects_rating_below_0
+- test_schema_rejects_empty_country
+- test_schema_rejects_empty_best_season
+- test_schema_rejects_negative_visitors
+- test_service_returns_travel_style_and_confidence
+- test_service_confidence_is_none_when_no_predict_proba
+- test_service_maps_columns_to_training_names
+- test_service_maps_unesco_false_to_no
+- test_predict_endpoint_success
+- test_predict_endpoint_returns_422_on_invalid_rating
+- test_predict_endpoint_returns_422_on_empty_country
+
+Commands run:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up TODO:
+- Expose ClassifierService as the destination_style_classifier agent tool in LangGraph.
+- Accept structured tool input (ClassifierPredictionRequest) from the agent's Haiku repair pass.
+
+## Fix Swagger auth display for protected endpoints
+
+Summary:
+- Updated get_current_user in app/dependencies.py to use FastAPI HTTPBearer security scheme.
+- Changed from manually reading Authorization header to using Depends(HTTPBearer()).
+- Allows Swagger UI to recognize protected endpoints and display the lock icon.
+- Maintained existing Supabase JWT verification (HS256, secret, audience).
+- Preserved AuthError behavior for missing/invalid/expired tokens (401 responses).
+- No auth strategy changes; Swagger display only.
+
+Files affected:
+- backend/app/dependencies.py (updated get_current_user to use HTTPBearer, added bearer_scheme)
+- docs/ai_change_log.txt (this entry)
+
+Verification:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (all tests pass, including auth tests with Bearer tokens)
+- Swagger /docs shows lock icon on /classifier/predict endpoint
+
+Details:
+- HTTPBearer(auto_error=False) allows graceful 401 responses
+- Credentials extracted as HTTPAuthorizationCredentials from Bearer token
+- All existing auth tests pass without modification
+- Protected endpoints now show visual security indicator in Swagger
+
+Follow-up:
+- Protected endpoints in other routers (chat, history, etc.) can use the same bearer_scheme dependency.
