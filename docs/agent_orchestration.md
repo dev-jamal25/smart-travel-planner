@@ -156,11 +156,73 @@ Three async functions that call existing services directly (not via HTTP):
 - Comprehensive error handling → structured `ToolResult`
 - No unhandled exceptions escape to caller
 
+### 10. Agent Persistence (`app/models/db.py`, `app/db/repositories/agent_runs.py`)
+
+Four new ORM models for comprehensive agent run tracking:
+
+#### **AgentRun** — Top-level agent execution record
+- `id` (UUID, PK)
+- `user_id` (UUID, indexed) — Always scoped to user
+- `user_query` (Text) — Original user request
+- `final_answer` (Text, nullable) — Synthesized response
+- `recommended_destination` (String, nullable)
+- `status` (String) — "running", "completed", or "failed"
+- `total_cost_usd` (Float, nullable) — Accumulated LLM + webhook cost
+- `webhook_delivered` (Boolean, nullable) — Discord webhook success
+- `webhook_status_code` (Integer, nullable)
+- `error_message` (Text, nullable) — If status="failed"
+- `created_at`, `completed_at` (DateTime, timezone-aware)
+
+#### **ToolCallLog** — Individual tool invocation
+- `id` (UUID, PK)
+- `run_id` (UUID, FK to agent_runs, indexed)
+- `tool_name` (String, indexed) — "destination_knowledge_retrieval", "classify_destination_style", "fetch_live_weather"
+- `input_json` (JSONB, nullable) — Tool input serialized
+- `output_summary` (Text, nullable) — Human-readable summary of output
+- `status` (String) — "ok" or "error"
+- `latency_ms` (Integer, nullable)
+- `created_at` (DateTime)
+
+#### **LLMUsageLog** — API call metrics for cost tracking
+- `id` (UUID, PK)
+- `run_id` (UUID, FK, indexed)
+- `step_name` (String, indexed) — "intent_extraction", "synthesis", etc.
+- `model` (String) — Model name used (e.g., "claude-3-haiku-20240307")
+- `input_tokens`, `output_tokens` (Integer, nullable)
+- `cost_usd` (Float, nullable) — Calculated cost
+- `latency_ms` (Integer, nullable)
+- `created_at` (DateTime)
+
+#### **AgentTraceEvent** — Observability and debugging
+- `id` (UUID, PK)
+- `run_id` (UUID, FK, indexed)
+- `event_type` (String, indexed) — "tool_call", "llm_call", "decision", "error", etc.
+- `event_name` (String) — Human-readable name
+- `detail_json` (JSONB, nullable) — Event-specific context
+- `latency_ms` (Integer, nullable)
+- `created_at` (DateTime)
+
+**Repository functions** (`app/db/repositories/agent_runs.py`):
+- `create_agent_run(session, user_id, user_query)` → AgentRun
+- `mark_agent_run_completed(session, run_id, final_answer, ...) → AgentRun
+- `mark_agent_run_failed(session, run_id, error_message) → AgentRun
+- `log_tool_call(session, run_id, tool_name, input_json, output_summary, status, latency_ms) → ToolCallLog
+- `log_llm_usage(session, run_id, step_name, model, input_tokens, output_tokens, cost_usd, latency_ms) → LLMUsageLog
+- `log_trace_event(session, run_id, event_type, event_name, detail_json, latency_ms) → AgentTraceEvent
+- `list_agent_runs_for_user(session, user_id, limit) → list[AgentRun]
+- `get_agent_run_for_user(session, run_id, user_id) → AgentRun | None`
+
+**Key design:**
+- All DB functions are async
+- User scoping enforced: runs never exposed across users
+- Flush-based persistence: no session.commit() inside helpers (caller decides)
+- JSONB for flexible tool inputs/outputs and trace details
+- Indexes on foreign keys + frequently-filtered columns (user_id, status, tool_name, step_name, event_type)
+
 ## What Is NOT Implemented
 
 ### ✗ LangGraph Graph
 The agent orchestration graph is not built yet. This will be added in the next slice when:
-- DB schema for agent runs/tool calls is ready
 - Anthropic model setup and cost tracking is ready
 - Chat route integration is planned
 
@@ -168,9 +230,6 @@ The agent orchestration graph is not built yet. This will be added in the next s
 No LLM calls yet. The agent will call Anthropic in the next slice using:
 - Haiku for mechanical tasks (intent extraction, query rewriting, etc.)
 - Sonnet for final synthesis
-
-### ✗ Agent Run Persistence
-No DB migrations or ORM models for agent runs, tool calls, or LLM usage tracking yet.
 
 ### ✗ Chat Route Integration
 The `/chat` endpoint is not wired to the agent yet. That will happen when the agent graph is built.
@@ -180,15 +239,16 @@ No changes to React frontend.
 
 ## Testing
 
-All new components are tested with mocked services (no real DB, embeddings, models, or APIs):
+Components tested with:
 
 - **`test_agent_schemas.py`** — 20+ tests for request/response types and validation
 - **`test_agent_tools.py`** — 10+ tests for tool wrappers with mocked services
 - **`test_destination_profiles.py`** — 10+ tests for profile lookup and registry
+- **`test_agent_persistence.py`** — 15+ tests for repositories with in-memory SQLite
 
 Run tests:
 ```bash
-uv run pytest tests/test_agent_schemas.py tests/test_agent_tools.py tests/test_destination_profiles.py -v
+uv run pytest tests/test_agent_schemas.py tests/test_agent_tools.py tests/test_destination_profiles.py tests/test_agent_persistence.py -v
 ```
 
 Or all tests:

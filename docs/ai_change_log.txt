@@ -514,6 +514,70 @@ Follow-up:
 - Tools used and costs tracked separately in AgentRun and tool call tables.
 - Admin dashboard can query agent run tables for observability.
 
+## Agent persistence layer
+
+Summary:
+- Added 4 new ORM models to app/models/db.py: AgentRun, ToolCallLog, LLMUsageLog, AgentTraceEvent.
+- AgentRun stores top-level agent execution: user_id (indexed), user_query, final_answer, status (running/completed/failed), timestamps, webhook delivery status, and total cost.
+- ToolCallLog stores individual tool invocations: run_id (FK, indexed), tool_name (indexed), input_json (JSONB), output_summary, status, and latency.
+- LLMUsageLog stores API call metrics: run_id (FK, indexed), step_name (indexed), model, input/output tokens, cost_usd, and latency.
+- AgentTraceEvent stores observability: run_id (FK, indexed), event_type (indexed), event_name, detail_json (JSONB), and latency.
+- Created Alembic migration d7e2f4a9c1b6_add_agent_persistence_tables.py with table and index definitions.
+- Added app/db/repositories/agent_runs.py with 8 async repository functions:
+  - create_agent_run(session, user_id, user_query) → AgentRun with status="running"
+  - mark_agent_run_completed(session, run_id, final_answer, ...) → update all fields
+  - mark_agent_run_failed(session, run_id, error_message) → set status="failed"
+  - log_tool_call(session, run_id, tool_name, input_json, output_summary, status, latency_ms) → ToolCallLog
+  - log_llm_usage(session, run_id, step_name, model, input_tokens, output_tokens, cost_usd, latency_ms) → LLMUsageLog
+  - log_trace_event(session, run_id, event_type, event_name, detail_json, latency_ms) → AgentTraceEvent
+  - list_agent_runs_for_user(session, user_id, limit) → list[AgentRun] ordered by created_at DESC
+  - get_agent_run_for_user(session, run_id, user_id) → AgentRun | None (enforces user scoping)
+- All functions are async, use flush() not commit(), and enforce user scoping.
+- Added tests/test_agent_persistence.py with 15+ test cases covering all repository operations.
+- Updated docs/agent_orchestration.md with "10. Agent Persistence" section explaining schemas and design.
+
+Files affected:
+- backend/app/models/db.py (added 4 new ORM models with proper imports and constraints)
+- backend/app/db/migrations/versions/d7e2f4a9c1b6_add_agent_persistence_tables.py (new migration)
+- backend/app/db/repositories/__init__.py (new)
+- backend/app/db/repositories/agent_runs.py (new — 8 repository functions)
+- backend/tests/test_agent_persistence.py (new — 15+ tests)
+- docs/agent_orchestration.md (added "10. Agent Persistence" section)
+- docs/ai_change_log.txt (this entry)
+
+Reason:
+- Foundation for LangGraph agent integration: persistence infrastructure must be in place before orchestration.
+- No LangGraph graph built yet; no Anthropic calls yet; no agent orchestration.
+- Persistence layer is decoupled from agent logic: can be tested independently.
+- Database rows will be populated during future agent runs.
+
+Design details:
+- User scoping enforced: WHERE clauses include both run_id and user_id to prevent cross-user data leaks.
+- Flush-based persistence: helpers call await session.flush() but do not commit, allowing caller to manage transaction boundaries.
+- JSONB for flexible tool inputs/outputs and trace details; no schema restriction on tool input/output shapes.
+- Indexes on foreign keys + frequently-filtered columns (user_id, status, tool_name, step_name, event_type) for query performance.
+- All timestamps are timezone-aware (DateTime with timezone=True).
+
+Commands run:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes — no issues with new models/repos)
+- uv run pytest -q (15 new tests + existing = 138 total passed)
+- uv run alembic revision --autogenerate -m "add agent persistence tables" (migration recognized)
+- Migration applied successfully with uv run alembic upgrade head
+
+Verification:
+- All ORM models follow established patterns (mapped_column, Mapped types, UUID PKs).
+- Repository functions follow async patterns used throughout the codebase.
+- User scoping tested in test_get_agent_run_for_user: correct user access allowed, wrong user blocked.
+- JSONB fields tested: input_json and detail_json correctly stored and retrieved.
+- Indexes created on all foreign keys and frequently-filtered columns.
+
+Follow-up:
+- Wire repositories into LangGraph agent when orchestration is built.
+- Alembic upgrade head to apply migration to development/test databases.
+- Add admin endpoints or a dashboard to query agent run tables for observability (not required for MVP).
+- Agent will call repository functions after each tool execution and at final synthesis to log observability data.
+
 ## Agent orchestration foundation
 
 Summary:
