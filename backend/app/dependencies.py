@@ -14,6 +14,7 @@ from app.exceptions import AuthError
 from app.schemas.auth import CurrentUser
 from app.services.classifier_service import ClassifierService
 from app.services.rag_service import RagService
+from app.services.weather_service import WeatherService
 
 # Security scheme for Swagger auth display
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -84,3 +85,8 @@ def get_classifier_service(request: Request) -> ClassifierService:  # noqa: ARG0
 
 def get_rag_service(request: Request) -> RagService:
     return RagService(embedder=request.app.state.embedder)
+
+
+def get_weather_service(request: Request) -> WeatherService:
+    service: WeatherService = request.app.state.weather_service
+    return service

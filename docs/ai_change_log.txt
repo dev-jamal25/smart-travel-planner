@@ -349,3 +349,66 @@ Implementation details:
 
 Follow-up:
 - Chat and history routers can add Depends(get_current_user) to protected endpoints for user-scoped data access.
+
+## Weather/live-conditions tool foundation
+
+Summary:
+- Added weather forecast service backed by Open-Meteo (no API key required).
+- WeatherService is a lifespan singleton: one httpx.AsyncClient, one TTLCache per process.
+- Cache TTL is configurable via WEATHER_CACHE_TTL_SECONDS (default 600 s); TTLCache(maxsize=128).
+- Tenacity AsyncRetrying: 3 attempts, wait_exponential(0.5 s → 8 s), retries only on
+  httpx.RequestError (network failures); HTTP status errors propagate immediately.
+- Fixed-coordinate map for the 10 supported RAG destinations — no geocoding API.
+- POST /weather/forecast is public (Open-Meteo data is public); returns 422 for unsupported
+  destination, 502 for Open-Meteo failure, 200 with cached: bool for success.
+- WeatherToolError schema added for future agent structured error return.
+- docs/weather_tool.md documents design rationale, parameters, and agent integration path.
+
+Files changed:
+- backend/app/schemas/weather.py (new — WeatherForecastRequest, DailyWeather,
+  WeatherForecastResponse, WeatherToolError)
+- backend/app/services/destination_coordinates.py (new — DestinationCoordinates,
+  get_destination_coordinates(), list_supported_destinations())
+- backend/app/services/weather_service.py (new — WeatherService, WeatherServiceError,
+  _parse_open_meteo())
+- backend/app/routers/weather.py (new — POST /weather/forecast)
+- backend/app/dependencies.py (added get_weather_service())
+- backend/app/main.py (WeatherService created/closed in lifespan, weather router registered)
+- backend/pyproject.toml (added cachetools.* to mypy ignore_missing_imports)
+- backend/tests/test_weather.py (new — 19 tests)
+- backend/docs/weather_tool.md (new — design rationale)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (19 total):
+- test_coordinates_lookup_exact_name
+- test_coordinates_lookup_case_insensitive
+- test_coordinates_lookup_trims_whitespace
+- test_coordinates_unsupported_destination_returns_none
+- test_coordinates_krakow_accepts_ascii_and_unicode
+- test_list_supported_destinations_contains_all_ten
+- test_schema_accepts_valid_request
+- test_schema_default_forecast_days_is_3
+- test_schema_rejects_forecast_days_zero
+- test_schema_rejects_forecast_days_eight
+- test_schema_accepts_forecast_days_boundaries
+- test_schema_rejects_empty_destination
+- test_service_parses_mock_response
+- test_service_second_call_returns_cached_true
+- test_service_raises_for_unsupported_destination
+- test_service_raises_on_http_error
+- test_forecast_endpoint_success
+- test_forecast_endpoint_unsupported_destination
+- test_forecast_endpoint_open_meteo_failure_returns_502
+- test_forecast_endpoint_invalid_forecast_days
+
+Commands run:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up TODO:
+- Wire WeatherService into LangGraph agent as the live_conditions tool.
+- Accept LiveConditionsInput (destination, forecast_days) from agent; return WeatherToolError
+  on failure so the agent handles it gracefully instead of crashing the run.
+- Add weather_code → human-readable description mapping for richer agent synthesis.
+- Add auth (Depends(get_current_user)) to /weather/forecast before production if needed.
