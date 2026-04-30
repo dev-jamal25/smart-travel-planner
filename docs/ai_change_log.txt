@@ -73,3 +73,40 @@ Follow-up:
 - Wire RagService into LangGraph agent as the destination retrieval tool.
 - Add Haiku query rewriting before retrieval.
 - Add hybrid BM25 re-ranking pass.
+
+## Wikivoyage raw data collection
+
+Summary:
+- Created fetch_wikivoyage_raw.py script to collect real destination content from Wikivoyage.
+- Script fetches from Wikivoyage MediaWiki API (primary) with direct HTML page fallback (secondary).
+- Proper User-Agent header per Wikimedia terms of service.
+- HTML cleaning: removes [citations], [edit] links, normalizes whitespace.
+- Splits each destination into 2 documents (_overview.txt + _details.txt) for balanced retrieval.
+- Fixed API response parsing: correctly extracts text from `data["parse"]["text"]["*"]` structure.
+- Successfully collected and ingested 20 real Wikivoyage documents (10 destinations × 2 sections).
+- Generated ~1,800 chunks with embeddings stored in Postgres+pgvector.
+- All source files include proper attribution: destination, source_title, and source_url headers.
+- Updated docs/rag_foundation.md with "Raw Corpus Collection" section explaining the real-sources-only approach.
+
+Files affected:
+- backend/scripts/fetch_wikivoyage_raw.py (new)
+- backend/rag_data/raw/*.txt (20 new real-source files)
+- backend/pyproject.toml (added beautifulsoup4>=4.12.0)
+- docs/rag_foundation.md (added Raw Corpus Collection section)
+
+Commands executed:
+- uv run python scripts/fetch_wikivoyage_raw.py
+  → Result: Successfully created 20 files from Wikivoyage API/HTML fallback
+- uv run python scripts/ingest_rag_documents.py
+  → Result: Successfully ingested 20 files, generated 1,800+ chunks with embeddings
+
+Tests:
+- Verified file content contains real Wikivoyage source URL and travel information.
+- Confirmed embeddings are stored in destination_chunks table with vector embeddings.
+- Checked chunk parsing and splitting logic.
+
+Follow-up:
+- Add HNSW vector index on destination_chunks(embedding) after verifying data integrity.
+- Wire RagService.retrieve_top_k into LangGraph agent as destination knowledge tool.
+- Add Haiku query rewriting for better embedding search.
+- Add more destination articles if corpus needs expansion (currently 10 destinations).

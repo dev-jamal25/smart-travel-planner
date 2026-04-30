@@ -30,6 +30,28 @@ Similarity is measured by **cosine distance** (pgvector `<=>` operator). Results
 
 The `retrieve_top_k` method in `RagService` joins `DestinationChunk` with `DestinationDocument` to return `source_title` alongside each chunk, giving the agent provenance information.
 
+## Raw Corpus Collection
+
+The raw corpus for RAG is collected exclusively from **Wikivoyage** through the MediaWiki Action API.
+
+**Approach:**
+- 10 destination articles fetched from Wikivoyage (real sources only; no synthetic fallback content)
+- Each destination split into 2 documents (_overview.txt + _details.txt) for balanced chunk retrieval
+- HTML cleaned, citations removed, formatted as plain text with headers (destination, source_title, source_url)
+- Stored in `backend/rag_data/raw/` before ingestion
+
+**Source Attribution:**
+Every raw text file includes full source attribution in its header:
+- `source_title`: Human-readable title from Wikivoyage
+- `source_url`: Direct link to the Wikivoyage article, e.g., `https://en.wikivoyage.org/wiki/Interlaken`
+
+**Real Data Commitment:**
+The collection script (`backend/scripts/fetch_wikivoyage_raw.py`) is production-safe:
+- Fetches exclusively from Wikivoyage MediaWiki API with proper User-Agent header
+- Falls back to direct HTML page fetch if API is rate-limited
+- Skips destinations if neither source returns valid content
+- Never generates synthetic or sample content
+
 ## Implemented Now
 
 - `DestinationDocument` and `DestinationChunk` ORM models (`app/models/db.py`)
