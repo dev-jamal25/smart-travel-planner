@@ -1,15 +1,125 @@
 from collections.abc import AsyncGenerator
+from functools import lru_cache
+from typing import Annotated
+from uuid import UUID
 
+import jwt
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, PyJWKClientError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.model_router import ModelRouter
+from app.config import get_settings
+from app.exceptions import AuthError
+from app.schemas.auth import CurrentUser
+from app.services.agent_service import AgentService
+from app.services.classifier_service import ClassifierService
+from app.services.rag_service import RagService
+from app.services.weather_service import WeatherService
+from app.services.webhook_service import WebhookService
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    raise NotImplementedError
+# Security scheme for Swagger auth display
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_current_user() -> None:
-    raise NotImplementedError
+@lru_cache(maxsize=1)
+def _get_jwks_client() -> jwt.PyJWKClient:
+    """Get cached JWKS client for token verification.
+    
+    Cached because JWKS URL is static per Supabase project.
+    """
+    settings = get_settings()
+    return jwt.PyJWKClient(
+        uri=settings.supabase_jwt_jwks_url,
+        cache_keys=True,
+        max_cached_keys=10,
+    )
 
 
-def get_classifier() -> None:
-    raise NotImplementedError
+async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    async with request.app.state.session_factory() as session:
+        yield session
+
+
+async def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> CurrentUser:
+    """Verify Supabase JWT token (ES256) and return current user.
+
+    Uses JWKS for public-key verification and validates audience, issuer, expiration.
+    Uses FastAPI HTTPBearer security scheme for Swagger auth display.
+    """
+    if credentials is None:
+        raise AuthError("Missing authorization header")
+
+    token = credentials.credentials
+    settings = get_settings()
+    
+    try:
+        # Get the signing key from JWKS
+        jwks_client = _get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        
+        # Decode and verify token with public key
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["ES256"],
+            audience=settings.supabase_jwt_audience,
+            issuer=settings.supabase_jwt_issuer,
+        )
+    except (ExpiredSignatureError, InvalidTokenError, PyJWKClientError) as err:
+        raise AuthError("Invalid or expired token") from err
+    
+    return CurrentUser(user_id=UUID(payload["sub"]), email=payload.get("email", ""))
+
+
+def get_classifier_service(request: Request) -> ClassifierService:  # noqa: ARG001
+    """Dependency to inject classifier service.
+
+    Uses request app.state.classifier loaded in FastAPI lifespan.
+    """
+    model = getattr(request.app.state, "classifier", None)
+    if model is None:
+        raise HTTPException(status_code=503, detail="Classifier model not available")
+    return ClassifierService(model=model)
+
+
+def get_rag_service(request: Request) -> RagService:
+    return RagService(embedder=request.app.state.embedder)
+
+
+def get_weather_service(request: Request) -> WeatherService:
+    service: WeatherService = request.app.state.weather_service
+    return service
+
+
+def get_webhook_service(request: Request) -> WebhookService:
+    service: WebhookService = request.app.state.webhook_service
+    return service
+
+
+def get_model_router(request: Request) -> ModelRouter:
+    """Dependency to inject model router (Haiku/Sonnet).
+
+    Uses request app.state.model_router created in FastAPI lifespan.
+    """
+    router: ModelRouter = request.app.state.model_router
+    return router
+
+
+def get_agent_service(request: Request) -> AgentService:
+    """Dependency to inject AgentService.
+
+    Creates a fresh AgentService per request (rag_service and
+    classifier_service are per-request wrappers; the underlying singletons
+    live on app.state).
+    """
+    return AgentService(
+        model_router=get_model_router(request),
+        rag_service=get_rag_service(request),
+        classifier_service=get_classifier_service(request),
+        weather_service=get_weather_service(request),
+        webhook_service=get_webhook_service(request),
+    )

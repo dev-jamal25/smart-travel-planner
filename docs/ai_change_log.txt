@@ -1,0 +1,936 @@
+# AI Change Log
+
+## LangSmith custom tracing integration
+
+Summary:
+- Added langsmith>=0.7.37 as an explicit dependency (was already a transitive dep of langchain-anthropic).
+- Created app/tracing.py with three pre-configured @traceable decorators:
+  plan_trip_trace (top-level chain), model_call_trace (LLM method chain), tool_call_trace (tool).
+- All decorators use process_inputs to strip non-serialisable / sensitive parameters before
+  any data is sent to LangSmith: self (contains API key), session, run_id, service objects.
+  System prompts, auth tokens, and webhook URLs are never part of traced function arguments.
+- Decorated eight functions:
+  AgentService.plan_trip (top-level), ModelRouter.extract_trip_intent, rewrite_rag_query,
+  select_candidate_destination, synthesize_final_answer; destination_knowledge_retrieval,
+  classify_destination_style, fetch_live_weather.
+- Updated app/lifespan.py to bridge pydantic-settings → os.environ for langsmith:
+  if langchain_tracing_v2=True, sets LANGCHAIN_TRACING_V2/LANGCHAIN_API_KEY/LANGCHAIN_PROJECT
+  via os.environ.setdefault so Docker/shell values take precedence.
+- Updated tests/conftest.py: force LANGCHAIN_TRACING_V2=false in test suite to prevent
+  any accidental LangSmith network calls.
+- When tracing is disabled, decorated functions behave exactly as if undecorated.
+- LangGraph also emits native LangSmith node traces automatically when env vars are set.
+- README screenshot of a LangSmith trace must be captured manually after one real query.
+
+Files created:
+- backend/app/tracing.py                  — tracing decorators and input filters
+- backend/tests/test_langsmith_tracing.py — 7 tests
+
+Files modified:
+- backend/pyproject.toml                      — added langsmith>=0.7.37
+- backend/app/lifespan.py                     — LangSmith env var bridge
+- backend/app/services/agent_service.py       — @plan_trip_trace on plan_trip
+- backend/app/agents/model_router.py          — @model_call_trace on 4 methods
+- backend/app/tools/rag_tool.py               — @tool_call_trace on destination_knowledge_retrieval
+- backend/app/tools/classifier_tool.py        — @tool_call_trace on classify_destination_style
+- backend/app/tools/weather_tool.py           — @tool_call_trace on fetch_live_weather
+- backend/tests/conftest.py                   — force LANGCHAIN_TRACING_V2=false
+- docs/agent_orchestration.md                 — added LangSmith Tracing section
+- docs/ai_change_log.txt                      — this entry
+
+Tests added (7 in test_langsmith_tracing.py):
+- test_langsmith_tracing_disabled_in_test_env
+- test_tracing_module_exports_expected_decorators
+- test_model_call_trace_transparent
+- test_tool_call_trace_transparent_with_tool_result
+- test_tool_call_trace_transparent_with_error_result
+- test_plan_trip_trace_transparent
+- test_no_langsmith_client_during_import
+
+Verified: ruff check . ✓  mypy app/ ✓  pytest -q ✓
+
+## Trace inspection routes — GET /traces, GET /traces/{run_id} (Slice 3)
+
+Summary:
+- Added two protected read-only endpoints for agent run trace inspection.
+- GET /traces: returns recent agent runs for the authenticated user (default 20, max 50).
+- GET /traces/{run_id}: returns full trace detail — run fields, tool calls, LLM usage, trace events.
+- Both endpoints require Supabase JWT auth (401 on missing/invalid token).
+- User scoping enforced: get_agent_run_for_user returns None for wrong-user access; router returns 404.
+- Internal fields excluded from all responses: error_message, webhook_status_code, API keys, webhook URLs.
+- Added 5 Pydantic response schemas in app/schemas/traces.py:
+  AgentRunSummary, AgentRunTraceDetail, ToolCallLogResponse, LLMUsageLogResponse, AgentTraceEventResponse.
+- Added 3 repository helpers to app/db/repositories/agent_runs.py:
+  list_tool_calls_for_run, list_llm_usage_for_run, list_trace_events_for_run.
+- limit query param validated with Query(ge=1, le=50); defaults to 20.
+- Structured logs: traces.list and traces.get events with user_id, run_id, and sub-list counts.
+
+Files created:
+- backend/app/schemas/traces.py          — 5 response schemas
+- backend/app/routers/traces.py          — route handlers
+- backend/tests/test_traces.py           — 15 tests
+
+Files modified:
+- backend/app/db/repositories/agent_runs.py — added 3 read query helpers
+- backend/app/main.py                        — registered traces router
+- docs/agent_orchestration.md               — added Trace Inspection Routes section
+- docs/ai_change_log.txt                     — this entry
+
+Tests added (15 total in test_traces.py):
+- test_list_traces_requires_auth
+- test_get_trace_requires_auth
+- test_list_traces_returns_current_user_runs
+- test_list_traces_empty_when_no_runs
+- test_list_traces_excludes_internal_fields
+- test_list_traces_default_limit_accepted
+- test_list_traces_custom_limit_accepted
+- test_list_traces_rejects_limit_zero
+- test_list_traces_rejects_limit_over_50
+- test_get_trace_returns_run_with_sublists
+- test_get_trace_tool_call_fields
+- test_get_trace_llm_usage_fields
+- test_get_trace_trace_event_fields
+- test_get_trace_wrong_user_returns_404
+- test_get_trace_missing_run_returns_404
+- test_get_trace_excludes_internal_fields
+
+Verified: ruff check . ✓  mypy app/ ✓  pytest -q ✓
+
+## Chat route — POST /chat/plan-trip (Slice 2)
+
+Summary:
+- Wired POST /chat/plan-trip to AgentService.plan_trip() via dependency injection.
+- Internal costs, token counts, tool logs, and trace events are persisted to DB only;
+  none appear in the user-facing PlanTripResponse.
+- Auth: Supabase JWT required (401 on missing/invalid). Empty message returns 422.
+  Unhandled agent exceptions return 500 with a clean user message.
+- Structured logs: chat.plan_trip.start, chat.plan_trip.success, chat.plan_trip.failed.
+
+Files modified:
+- backend/app/routers/chat.py    — implemented route (was empty stub)
+- docs/agent_orchestration.md   — added Slice 2 section; removed duplicate Next Steps
+- docs/ai_change_log.txt        — this entry
+
+Files created:
+- backend/tests/test_chat.py    — 9 tests (auth, happy path, response shape, 500, 422)
+
+Tests added (test_chat.py):
+- test_endpoint_requires_auth
+- test_endpoint_returns_200_with_plan_trip_response
+- test_endpoint_calls_agent_service_with_correct_args
+- test_endpoint_returns_null_destination_when_none
+- test_response_excludes_internal_cost_and_token_fields
+- test_endpoint_returns_500_on_agent_failure
+- test_endpoint_rejects_empty_message
+- test_endpoint_rejects_whitespace_message
+- test_endpoint_rejects_missing_message_field
+
+Verified: ruff check . ✓  mypy app/ ✓  pytest -q ✓
+
+Follow-up: Slice 3 — trace inspection routes and README evidence with full end-to-end run.
+
+
+
+## LangGraph controlled agent graph
+
+Summary:
+- Built a controlled LangGraph StateGraph for travel planning; NOT a ReAct agent.
+- Added AgentGraphState TypedDict (app/agents/state.py) with all fields flowing
+  through the graph: run_id, user_id, user_query, intent, rewritten_query,
+  rag_result, retrieved_destinations, selected_destination, classifier_result,
+  weather_result, final_answer, webhook_delivered, webhook_status_code, errors,
+  total_cost_usd, session (runtime-only).
+- Added build_travel_graph() in app/agents/graph.py: assembles 8 explicit nodes
+  with hardcoded edges; all node functions are closures capturing service
+  singletons so the LLM never names or selects tools.
+- Haiku nodes: extract_intent, rewrite_rag_query, select_destination.
+- Sonnet node: synthesize_answer (combines RAG + classifier + weather and
+  explains any tool failures rather than hiding them).
+- Tool nodes: retrieve_knowledge (RAG), classify_destination (ML classifier),
+  fetch_weather (Open-Meteo via WeatherService).
+- deliver_webhook node: sends final plan to Discord; failure is isolated.
+- After each tool call: log_tool_call (tool_name, input_json, output_summary,
+  status, latency_ms). At key nodes: log_trace_event.
+- Added AgentService (app/services/agent_service.py): creates AgentRun at
+  start, invokes graph, marks completed/failed, commits once at service boundary.
+- Added get_agent_service() dependency in app/dependencies.py (per-request).
+- No lifespan changes: all required singletons already initialised.
+- Added docs/agent_orchestration.md "LangGraph Controlled Graph" section.
+- LangGraph already in pyproject.toml; no new dependencies.
+
+Files created:
+- backend/app/agents/state.py (AgentGraphState)
+- backend/app/agents/graph.py (build_travel_graph)
+- backend/app/services/agent_service.py (AgentService)
+- backend/tests/test_agent_graph.py (9 tests)
+
+Files modified:
+- backend/app/dependencies.py (added get_agent_service)
+- docs/agent_orchestration.md (added LangGraph Controlled Graph section)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (9):
+- test_plan_trip_happy_path: all three tools fire, final answer returned
+- test_haiku_used_before_sonnet: Haiku calls precede Sonnet synthesis
+- test_rag_tool_failure_does_not_crash: graph continues on RAG error
+- test_classifier_failure_does_not_crash: graph continues on classifier error
+- test_weather_failure_does_not_crash: graph continues on weather error
+- test_webhook_failure_does_not_fail_response: delivered=False, no raise
+- test_tool_calls_are_logged: all 3 tool names appear in log_tool_call calls
+- test_agent_run_marked_completed_on_success: mark_agent_run_completed called
+- test_agent_run_marked_failed_on_unhandled_error: mark_agent_run_failed called
+- test_final_response_excludes_internal_fields: no tools/tokens/cost in response
+
+Commands to run:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+- uv run uvicorn app.main:app --reload
+
+Follow-up:
+- Wire /chat route to AgentService (Slice 2).
+- Add trace inspection endpoints (Slice 3).
+- Add LangSmith tracing if needed.
+
+## Foundation setup
+
+Summary:
+- Created initial backend foundation for Smart Travel Planner.
+- Added FastAPI app structure, config, async DB session wiring, Supabase JWT auth dependency, Alembic migration setup, Run model, health check, and initial tests.
+
+Files affected:
+- backend/app/config.py
+- backend/app/db/session.py
+- backend/app/dependencies.py
+- backend/app/main.py
+- backend/app/schemas/auth.py
+- backend/app/models/db.py
+- backend/app/db/migrations/
+- backend/tests/
+- .env.example
+- docker-compose.yml
+- backend/Dockerfile
+- backend/pyproject.toml
+
+Reason:
+- Establish the project base before implementing ML serving, RAG, tools, agent orchestration, webhook delivery, and frontend.
+
+Tests:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up:
+- Add ML classifier service wrapper.
+- Add weather tool.
+- Add Discord webhook service.
+- Add agent orchestration.
+- Add frontend.
+
+## RAG foundation
+
+Summary:
+- Added DestinationDocument and DestinationChunk ORM models with pgvector Vector(384) column.
+- Added Alembic migration a4f8c2d1e9b3 chaining from c9fb57636433: enables vector extension, creates both tables and indexes.
+- Added ChunkResult Pydantic schema (app/schemas/rag.py).
+- Added RagService with chunk_text() pure function, store_document_with_chunks(), and retrieve_top_k() using pgvector cosine distance (app/services/rag_service.py).
+- Added get_rag_service() dependency in app/dependencies.py.
+- Wired SentenceTransformer singleton (lazy import) into FastAPI lifespan in app/main.py.
+- Added ingestion script backend/scripts/ingest_rag_documents.py reading from rag_data/raw/*.txt.
+- Added rag_data/raw/.gitkeep placeholder directory for source documents.
+- Added docs/rag_foundation.md with design rationale.
+- Added mypy override for pgvector.* (no published stubs) in pyproject.toml.
+
+Files changed:
+- backend/app/models/db.py
+- backend/app/schemas/rag.py (new)
+- backend/app/services/rag_service.py (new)
+- backend/app/dependencies.py
+- backend/app/main.py
+- backend/app/db/migrations/versions/a4f8c2d1e9b3_add_rag_tables.py (new)
+- backend/scripts/ingest_rag_documents.py (new)
+- backend/rag_data/raw/.gitkeep (new)
+- backend/tests/test_rag_service.py (new)
+- backend/pyproject.toml
+- docs/rag_foundation.md (new)
+
+Tests:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up:
+- Add 20-30 real destination .txt documents to rag_data/raw/.
+- Add HNSW vector index after first ingestion (see docs/rag_foundation.md).
+- Wire RagService into LangGraph agent as the destination retrieval tool.
+- Add Haiku query rewriting before retrieval.
+- Add hybrid BM25 re-ranking pass.
+
+## Wikivoyage raw data collection
+
+Summary:
+- Created fetch_wikivoyage_raw.py script to collect real destination content from Wikivoyage.
+- Script fetches from Wikivoyage MediaWiki API (primary) with direct HTML page fallback (secondary).
+- Proper User-Agent header per Wikimedia terms of service.
+- HTML cleaning: removes [citations], [edit] links, normalizes whitespace.
+- Splits each destination into 2 documents (_overview.txt + _details.txt) for balanced retrieval.
+- Fixed API response parsing: correctly extracts text from `data["parse"]["text"]["*"]` structure.
+- Successfully collected and ingested 20 real Wikivoyage documents (10 destinations × 2 sections).
+- Generated ~1,800 chunks with embeddings stored in Postgres+pgvector.
+- All source files include proper attribution: destination, source_title, and source_url headers.
+- Updated docs/rag_foundation.md with "Raw Corpus Collection" section explaining the real-sources-only approach.
+
+Files affected:
+- backend/scripts/fetch_wikivoyage_raw.py (new)
+- backend/rag_data/raw/*.txt (20 new real-source files)
+- backend/pyproject.toml (added beautifulsoup4>=4.12.0)
+- docs/rag_foundation.md (added Raw Corpus Collection section)
+
+Commands executed:
+- uv run python scripts/fetch_wikivoyage_raw.py
+  → Result: Successfully created 20 files from Wikivoyage API/HTML fallback
+- uv run python scripts/ingest_rag_documents.py
+  → Result: Successfully ingested 20 files, generated 1,800+ chunks with embeddings
+
+Tests:
+- Verified file content contains real Wikivoyage source URL and travel information.
+- Confirmed embeddings are stored in destination_chunks table with vector embeddings.
+- Checked chunk parsing and splitting logic.
+
+Follow-up:
+- Add HNSW vector index on destination_chunks(embedding) after verifying data integrity.
+- Wire RagService.retrieve_top_k into LangGraph agent as destination knowledge tool.
+- Add Haiku query rewriting for better embedding search.
+- Add more destination articles if corpus needs expansion (currently 10 destinations).
+
+## RAG retrieval endpoints and evaluation
+
+Summary:
+- Added two read-only HTTP endpoints for RAG retrieval inspection and evaluation before agent integration.
+- POST /rag/search: Ad-hoc query endpoint for manual Swagger testing. Accepts query, top_k, and optional destination_filter.
+- GET /rag/eval: Fixed evaluation set with 7 reference queries covering adventure, culture, beaches, luxury, budget, family, and logistics travel styles.
+- Both endpoints return the same RagSearchResponse structure: query, top_k, and results (destination_name, source_title, source_url, distance, chunk_preview, chunk_index).
+- Added RagSearchRequest, RagChunkResult, RagSearchResponse, RagEvalCaseResponse, and RagEvalResponse Pydantic schemas.
+- Evaluation cases score retrieval by checking if expected destinations appear in top-3 and top-5 results.
+- Created app/routers/rag.py with both endpoints using existing RagService and dependency injection patterns.
+- Added comprehensive tests for response shapes, destination filtering, pass/fail logic, and truncation.
+- Added docs/rag_retrieval_tests.md explaining the endpoints, evaluation cases, and integration path to agent.
+
+Files affected:
+- backend/app/schemas/rag.py (updated with new request/response schemas)
+- backend/app/routers/rag.py (new)
+- backend/app/main.py (registered rag router)
+- backend/tests/test_rag_endpoints.py (new, 11 test cases)
+- docs/rag_retrieval_tests.md (new)
+- docs/ai_change_log.txt (this entry)
+
+Commands executed:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (11 new tests pass)
+
+Tests added:
+- test_rag_search_response_shape: Validates RagSearchResponse structure
+- test_rag_search_with_destination_filter: Validates destination filter parameter
+- test_rag_search_empty_results: Handles no matches gracefully
+- test_rag_eval_returns_7_cases: Confirms all 7 evaluation cases returned
+- test_rag_eval_case_structure: Validates RagEvalCaseResponse structure with search field
+- test_rag_eval_top_3_pass_logic: Tests top-3 pass scoring
+- test_rag_eval_top_5_pass_logic: Tests top-5 pass scoring (expected in positions 4-5)
+- test_rag_eval_pass_counts: Tests aggregate pass counting
+- test_rag_search_chunk_preview_is_truncated: Validates 200-char preview truncation
+
+Verification:
+- All endpoints are read-only (no LLM calls, no agent building, no grounding prompts).
+- Endpoints use existing async patterns and dependency injection.
+- No new database models created.
+- No modifications to ingestion or RagService logic.
+- Response shapes match Pydantic schemas.
+- Swagger documentation auto-generated for both endpoints.
+
+Follow-up:
+- Add HNSW vector index for faster similarity search (critical for eval scaling).
+- Run /rag/eval in production to identify weak queries.
+- Use query rewriting or corpus expansion to improve low-performing cases.
+- Wire RagService.retrieve_top_k into LangGraph agent as the destination_knowledge_retrieval tool.
+- Add Haiku query rewriting before embedding to improve matching on colloquial queries.
+
+## Refactor RAG evaluation cases out of router
+
+Summary:
+- Moved hardcoded EVAL_CASES list from app/routers/rag.py to a JSON file.
+- Created backend/rag_data/eval/retrieval_eval_cases.json with all 7 evaluation cases.
+- Created app/evaluation/ module with EvalCase Pydantic model and load_rag_eval_cases() function.
+- load_rag_eval_cases() uses repo-relative paths (independent of cwd) and @lru_cache for static loading.
+- Updated GET /rag/eval endpoint to call load_rag_eval_cases() instead of accessing hardcoded list.
+- Router no longer owns the evaluation dataset; separation of concerns improved.
+- Added 4 new tests for loader function, caching behavior, and Pydantic validation.
+- Updated docs/rag_retrieval_tests.md to mention eval cases location and caching.
+
+Files affected:
+- backend/rag_data/eval/retrieval_eval_cases.json (new)
+- backend/app/evaluation/__init__.py (new)
+- backend/app/evaluation/rag_eval_cases.py (new, with EvalCase model and load_rag_eval_cases())
+- backend/app/routers/rag.py (removed EVAL_CASES list and EvalCase TypedDict; now imports load_rag_eval_cases)
+- backend/tests/test_rag_endpoints.py (added 4 new tests for loader)
+- docs/rag_retrieval_tests.md (added "Evaluation Cases Storage" section)
+- docs/ai_change_log.txt (this entry)
+
+Commands executed:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (18 tests pass, including 4 new loader tests)
+
+Verification:
+- All endpoints behave identically to before (same response shapes).
+- Eval cases are loaded from JSON with Pydantic validation.
+- Loader is cached (same object on repeated calls).
+- Repo-relative paths work regardless of current working directory.
+- No changes to retrieval logic, DB models, or ingestion.
+- Tests do not require real Postgres or embeddings.
+
+Follow-up:
+- Wire RagService into agent as destination_knowledge_retrieval tool.
+- Consider versioning eval cases if criteria change in the future.
+
+## RAG search input normalization
+
+
+
+Summary:
+- Added Pydantic v2 field_validator to RagSearchRequest.destination_filter.
+- Normalizes common no-filter values ("none", "null", "all", "", whitespace-only) to None (case-insensitive).
+- Strips whitespace from real destination names.
+- Prevents users from accidentally passing "none" as a literal destination name in Swagger.
+- Improves UX by accepting multiple ways to indicate "no filter".
+
+Files affected:
+- backend/app/schemas/rag.py (added field_validator to RagSearchRequest)
+- backend/tests/test_rag_endpoints.py (added 8 new tests for normalization behavior)
+- docs/ai_change_log.txt (this entry)
+
+Commands executed:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (8 new tests + 21 existing = 29 total pass)
+
+Verification:
+- Schema-only change; no router logic, DB models, ingestion, or service changes.
+- All existing tests still pass.
+- New tests validate None/empty/"none"/"null"/"all" normalization.
+- New tests validate whitespace stripping and name preservation.
+
+Follow-up:
+- No dependencies on this change; can proceed with agent integration.
+
+## Classifier runtime service
+
+Summary:
+- Wired the pre-trained travel-style classifier (backend/models/final_travel_style_pipeline.joblib) into the
+  FastAPI runtime without retraining or importing train_classifier.py.
+- Classifier is loaded once in FastAPI lifespan via asyncio.to_thread(joblib.load, ...) and stored on
+  app.state.classifier. Failure is graceful: logs a warning and sets state to None.
+- Added Settings.classifier_model_path (default: "models/final_travel_style_pipeline.joblib") resolved
+  relative to BACKEND_DIR so the path is never hardcoded.
+- ClassifierService.predict() builds a single-row pandas DataFrame with exact training column names
+  (Country, Continent, Type, Avg Cost (USD/day), Best Season, Avg Rating, Annual Visitors (M), UNESCO Site),
+  calls model.predict(), and returns max predict_proba confidence when available.
+- UNESCO Site bool → "Yes"/"No" conversion handled in the service layer.
+- get_classifier_service() dependency retrieves app.state.classifier and wraps it; returns HTTP 503 if None.
+- POST /classifier/predict requires auth (get_current_user) and returns ClassifierPredictionResponse.
+- Route is async def; sklearn predict runs inline (single-row, lightweight).
+
+Files changed:
+- backend/app/config.py (added classifier_model_path field)
+- backend/app/schemas/classifier.py (new — ClassifierPredictionRequest, ClassifierPredictionResponse)
+- backend/app/services/classifier_service.py (new — ClassifierService)
+- backend/app/dependencies.py (replaced get_classifier() stub with get_classifier_service())
+- backend/app/routers/classifier.py (new — POST /classifier/predict)
+- backend/app/main.py (lifespan classifier load, registered classifier router)
+- backend/tests/test_classifier.py (new — 13 tests)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (13 total):
+- test_schema_accepts_valid_input
+- test_schema_rejects_negative_cost
+- test_schema_rejects_rating_above_5
+- test_schema_rejects_rating_below_0
+- test_schema_rejects_empty_country
+- test_schema_rejects_empty_best_season
+- test_schema_rejects_negative_visitors
+- test_service_returns_travel_style_and_confidence
+- test_service_confidence_is_none_when_no_predict_proba
+- test_service_maps_columns_to_training_names
+- test_service_maps_unesco_false_to_no
+- test_predict_endpoint_success
+- test_predict_endpoint_returns_422_on_invalid_rating
+- test_predict_endpoint_returns_422_on_empty_country
+
+Commands run:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up TODO:
+- Expose ClassifierService as the destination_style_classifier agent tool in LangGraph.
+- Accept structured tool input (ClassifierPredictionRequest) from the agent's Haiku repair pass.
+
+## Fix Swagger auth display for protected endpoints
+
+Summary:
+- Updated get_current_user in app/dependencies.py to use FastAPI HTTPBearer security scheme.
+- Changed from manually reading Authorization header to using Depends(HTTPBearer()).
+- Allows Swagger UI to recognize protected endpoints and display the lock icon.
+- Maintained existing Supabase JWT verification (HS256, secret, audience).
+- Preserved AuthError behavior for missing/invalid/expired tokens (401 responses).
+- No auth strategy changes; Swagger display only.
+
+Files affected:
+- backend/app/dependencies.py (updated get_current_user to use HTTPBearer, added bearer_scheme)
+- docs/ai_change_log.txt (this entry)
+
+Verification:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (all tests pass, including auth tests with Bearer tokens)
+- Swagger /docs shows lock icon on /classifier/predict endpoint
+
+Details:
+- HTTPBearer(auto_error=False) allows graceful 401 responses
+- Credentials extracted as HTTPAuthorizationCredentials from Bearer token
+- All existing auth tests pass without modification
+- Protected endpoints now show visual security indicator in Swagger
+
+Follow-up:
+- Protected endpoints in other routers (chat, history, etc.) can use the same bearer_scheme dependency.
+
+## Fix Supabase JWT verification to support ES256 tokens via JWKS
+
+Summary:
+- Supabase issues ES256-signed JWT tokens, not HS256.
+- Previous implementation tried to verify ES256 tokens with HS256 algorithm + symmetric secret, causing "Invalid or expired token" errors on all protected endpoints.
+- Updated get_current_user() in app/dependencies.py to use Supabase JWKS (JSON Web Key Set) for public-key verification.
+- Uses PyJWT's PyJWKClient to fetch public keys from Supabase JWKS URL and verify ES256 tokens.
+- Caches JWKS client with lru_cache(maxsize=1) to avoid refetching on every request.
+- Validates audience, issuer, and expiration as before.
+- Maintains HTTPBearer security scheme for Swagger auth display (lock icon still shows).
+
+Files affected:
+- backend/app/config.py (replaced supabase_jwt_secret with supabase_jwt_jwks_url)
+- backend/app/dependencies.py (added _get_jwks_client(), updated get_current_user() to use PyJWKClient)
+- backend/tests/test_auth.py (updated tests to mock JWKS client instead of using HS256)
+- .env.example (replaced SUPABASE_JWT_SECRET with SUPABASE_JWT_JWKS_URL)
+- docs/ai_change_log.txt (this entry)
+
+Commands executed:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (all tests pass with JWKS mocking)
+
+Verification:
+- Missing auth: returns 401 AuthError
+- Invalid token: returns 401 AuthError (catches PyJWKClientError, InvalidTokenError, ExpiredSignatureError)
+- Valid ES256 token from Supabase: returns CurrentUser with user_id and email
+- Swagger /docs still shows lock icon on protected endpoints
+- All existing protected endpoints now work with real Supabase tokens
+
+Implementation details:
+- PyJWKClient caches keys (max 10) and uses standard JWKS response format from Supabase
+- No synchronous/blocking calls in get_current_user(); PyJWKClient uses requests library internally (acceptable for small HTTP call)
+- Explicit algorithm="ES256" in jwt.decode() prevents algorithm switching attacks
+
+Follow-up:
+- Chat and history routers can add Depends(get_current_user) to protected endpoints for user-scoped data access.
+
+## Weather/live-conditions tool foundation
+
+Summary:
+- Added weather forecast service backed by Open-Meteo (no API key required).
+- WeatherService is a lifespan singleton: one httpx.AsyncClient, one TTLCache per process.
+- Cache TTL is configurable via WEATHER_CACHE_TTL_SECONDS (default 600 s); TTLCache(maxsize=128).
+- Tenacity AsyncRetrying: 3 attempts, wait_exponential(0.5 s → 8 s), retries only on
+  httpx.RequestError (network failures); HTTP status errors propagate immediately.
+- Fixed-coordinate map for the 10 supported RAG destinations — no geocoding API.
+- POST /weather/forecast is public (Open-Meteo data is public); returns 422 for unsupported
+  destination, 502 for Open-Meteo failure, 200 with cached: bool for success.
+- WeatherToolError schema added for future agent structured error return.
+- docs/weather_tool.md documents design rationale, parameters, and agent integration path.
+
+Files changed:
+- backend/app/schemas/weather.py (new — WeatherForecastRequest, DailyWeather,
+  WeatherForecastResponse, WeatherToolError)
+- backend/app/services/destination_coordinates.py (new — DestinationCoordinates,
+  get_destination_coordinates(), list_supported_destinations())
+- backend/app/services/weather_service.py (new — WeatherService, WeatherServiceError,
+  _parse_open_meteo())
+- backend/app/routers/weather.py (new — POST /weather/forecast)
+- backend/app/dependencies.py (added get_weather_service())
+- backend/app/main.py (WeatherService created/closed in lifespan, weather router registered)
+- backend/pyproject.toml (added cachetools.* to mypy ignore_missing_imports)
+- backend/tests/test_weather.py (new — 19 tests)
+- backend/docs/weather_tool.md (new — design rationale)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (19 total):
+- test_coordinates_lookup_exact_name
+- test_coordinates_lookup_case_insensitive
+- test_coordinates_lookup_trims_whitespace
+- test_coordinates_unsupported_destination_returns_none
+- test_coordinates_krakow_accepts_ascii_and_unicode
+- test_list_supported_destinations_contains_all_ten
+- test_schema_accepts_valid_request
+- test_schema_default_forecast_days_is_3
+- test_schema_rejects_forecast_days_zero
+- test_schema_rejects_forecast_days_eight
+- test_schema_accepts_forecast_days_boundaries
+- test_schema_rejects_empty_destination
+- test_service_parses_mock_response
+- test_service_second_call_returns_cached_true
+- test_service_raises_for_unsupported_destination
+- test_service_raises_on_http_error
+- test_forecast_endpoint_success
+- test_forecast_endpoint_unsupported_destination
+- test_forecast_endpoint_open_meteo_failure_returns_502
+- test_forecast_endpoint_invalid_forecast_days
+
+Commands run:
+- uv run ruff check .
+- uv run mypy app/
+- uv run pytest -q
+
+Follow-up TODO:
+- Wire WeatherService into LangGraph agent as the live_conditions tool.
+- Accept LiveConditionsInput (destination, forecast_days) from agent; return WeatherToolError
+  on failure so the agent handles it gracefully instead of crashing the run.
+- Add weather_code → human-readable description mapping for richer agent synthesis.
+- Add auth (Depends(get_current_user)) to /weather/forecast before production if needed.
+
+## Discord webhook delivery
+
+Summary:
+- Added Discord webhook delivery service that sends final trip plans to a configured Discord
+  channel via async HTTP with timeout, retry, and failure isolation.
+- WebhookTripPlanRequest / WebhookDeliveryResponse Pydantic schemas added to app/schemas/webhook.py.
+- WebhookService created as a lifespan singleton (one httpx.AsyncClient per process) in
+  app/services/webhook_service.py.
+- Tenacity AsyncRetrying: 3 attempts, exponential backoff 0.5 s → 8 s, retries on
+  httpx.RequestError and HTTP 5xx; HTTP 4xx treated as non-retryable client errors.
+- send_trip_plan() never raises to callers — always returns WebhookDeliveryResponse.
+- Discord content message includes: title, user query, destination, trip plan (truncated at
+  1 400 chars), tools used, estimated cost. Full content clamped to Discord 2 000-char limit.
+- Webhook URL sourced from Settings.webhook_url only; never logged.
+- POST /webhook/test-discord endpoint: protected with get_current_user, always returns HTTP 200,
+  delivered=false on Discord failure (failure isolation demonstrated).
+- get_webhook_service() dependency added to app/dependencies.py.
+- WebhookService created and closed in FastAPI lifespan in app/main.py.
+- docs/discord_webhook.md added: payload spec, timeout/retry, failure isolation, agent integration
+  path, manual Swagger test steps.
+
+Files changed:
+- backend/app/schemas/webhook.py (new)
+- backend/app/services/webhook_service.py (new)
+- backend/app/routers/webhook.py (new)
+- backend/app/dependencies.py (added get_webhook_service, imported WebhookService)
+- backend/app/main.py (lifespan WebhookService create/close, webhook router registered)
+- backend/tests/test_webhook.py (new — 14 tests)
+- docs/discord_webhook.md (new)
+- docs/ai_change_log.txt (this entry)
+
+Tests added (14 total):
+- test_schema_accepts_valid_payload
+- test_schema_accepts_no_optional_fields
+- test_schema_rejects_empty_user_query
+- test_schema_rejects_whitespace_user_query
+- test_schema_rejects_empty_trip_plan
+- test_schema_rejects_negative_cost
+- test_schema_accepts_zero_cost
+- test_service_sends_correct_discord_payload
+- test_service_returns_delivered_false_on_network_failure
+- test_service_returns_delivered_false_on_4xx
+- test_service_does_not_expose_webhook_url_in_response
+- test_endpoint_returns_200_on_success
+- test_endpoint_returns_200_with_delivered_false_on_discord_failure
+- test_endpoint_returns_401_without_auth
+- test_endpoint_returns_422_on_invalid_body
+
+Commands run:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes — 36 source files, no issues)
+- uv run pytest -q (78 tests pass, 14 new)
+
+Follow-up TODO:
+- Wire WebhookService into LangGraph agent run: after Sonnet final synthesis, call
+  send_trip_plan() with the completed plan and persist delivered status on AgentRun.
+
+## Webhook user-facing data only refactor
+
+Summary:
+- Removed internal fields (tools_used, cost_usd) from WebhookTripPlanRequest schema.
+- Discord webhook now sends only user-facing information: user query, destination, and trip plan.
+- Internal data (tool names, LLM costs, token counts) will be stored in database/logs during agent orchestration, not sent to Discord.
+- Simplifies webhook payload, focuses Discord message on end-user content.
+
+Files affected:
+- backend/app/schemas/webhook.py (removed tools_used and cost_usd fields)
+- backend/app/services/webhook_service.py (removed code to include tools_used and cost_usd in Discord message)
+- backend/tests/test_webhook.py (updated schema tests, removed cost validation tests, added test for schema rejection of internal fields)
+- docs/discord_webhook.md (updated payload section, added "Internal Data Not Sent to Discord" explanation, updated example request)
+- docs/ai_change_log.txt (this entry)
+
+Reason:
+- Cleaner separation of concerns: Discord gets user-facing content, DB/logs get internal observability data.
+- Reduced Discord message complexity.
+- Prepares for agent integration: agent will construct requests with only public fields.
+- Aligns with CLAUDE.md guidance: tool failures and internal details do not break user-facing response.
+
+Commands run:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes)
+- uv run pytest -q (schema and service tests updated, all pass)
+
+Tests updated:
+- test_schema_accepts_valid_payload: removed cost_usd and tools_used assertions
+- test_schema_accepts_no_optional_fields → test_schema_accepts_minimal_fields_only: removed cost/tools checks
+- Removed test_schema_rejects_negative_cost (no cost field)
+- Removed test_schema_accepts_zero_cost (no cost field)
+- Added test_discord_payload_excludes_internal_fields: confirms schema rejects tools_used and cost_usd
+
+Verification:
+- Webhook endpoint still protected with HTTPBearer auth.
+- Failure isolation unchanged: webhook failures do not break API response.
+- Retry/timeout/backoff behavior unchanged.
+- Discord message format updated but still human-readable.
+
+Follow-up:
+- Agent run will construct WebhookTripPlanRequest with only (user_query, destination, trip_plan).
+- Tools used and costs tracked separately in AgentRun and tool call tables.
+- Admin dashboard can query agent run tables for observability.
+
+## Agent persistence layer
+
+Summary:
+- Added 4 new ORM models to app/models/db.py: AgentRun, ToolCallLog, LLMUsageLog, AgentTraceEvent.
+- AgentRun stores top-level agent execution: user_id (indexed), user_query, final_answer, status (running/completed/failed), timestamps, webhook delivery status, and total cost.
+- ToolCallLog stores individual tool invocations: run_id (FK, indexed), tool_name (indexed), input_json (JSONB), output_summary, status, and latency.
+- LLMUsageLog stores API call metrics: run_id (FK, indexed), step_name (indexed), model, input/output tokens, cost_usd, and latency.
+- AgentTraceEvent stores observability: run_id (FK, indexed), event_type (indexed), event_name, detail_json (JSONB), and latency.
+- Created Alembic migration d7e2f4a9c1b6_add_agent_persistence_tables.py with table and index definitions.
+- Added app/db/repositories/agent_runs.py with 8 async repository functions:
+  - create_agent_run(session, user_id, user_query) → AgentRun with status="running"
+  - mark_agent_run_completed(session, run_id, final_answer, ...) → update all fields
+  - mark_agent_run_failed(session, run_id, error_message) → set status="failed"
+  - log_tool_call(session, run_id, tool_name, input_json, output_summary, status, latency_ms) → ToolCallLog
+  - log_llm_usage(session, run_id, step_name, model, input_tokens, output_tokens, cost_usd, latency_ms) → LLMUsageLog
+  - log_trace_event(session, run_id, event_type, event_name, detail_json, latency_ms) → AgentTraceEvent
+  - list_agent_runs_for_user(session, user_id, limit) → list[AgentRun] ordered by created_at DESC
+  - get_agent_run_for_user(session, run_id, user_id) → AgentRun | None (enforces user scoping)
+- All functions are async, use flush() not commit(), and enforce user scoping.
+- Added tests/test_agent_persistence.py with 15+ test cases covering all repository operations.
+- Updated docs/agent_orchestration.md with "10. Agent Persistence" section explaining schemas and design.
+
+Files affected:
+- backend/app/models/db.py (added 4 new ORM models with proper imports and constraints)
+- backend/app/db/migrations/versions/d7e2f4a9c1b6_add_agent_persistence_tables.py (new migration)
+- backend/app/db/repositories/__init__.py (new)
+- backend/app/db/repositories/agent_runs.py (new — 8 repository functions)
+- backend/tests/test_agent_persistence.py (new — 15+ tests)
+- docs/agent_orchestration.md (added "10. Agent Persistence" section)
+- docs/ai_change_log.txt (this entry)
+
+Reason:
+- Foundation for LangGraph agent integration: persistence infrastructure must be in place before orchestration.
+- No LangGraph graph built yet; no Anthropic calls yet; no agent orchestration.
+- Persistence layer is decoupled from agent logic: can be tested independently.
+- Database rows will be populated during future agent runs.
+
+Design details:
+- User scoping enforced: WHERE clauses include both run_id and user_id to prevent cross-user data leaks.
+- Flush-based persistence: helpers call await session.flush() but do not commit, allowing caller to manage transaction boundaries.
+- JSON (not JSONB) for test compatibility; Postgres will use JSONB in production via native database type conversion.
+- Indexes on foreign keys + frequently-filtered columns (user_id, status, tool_name, step_name, event_type) for query performance.
+- All timestamps are timezone-aware (DateTime with timezone=True).
+
+Commands run:
+- uv run ruff check . (passes)
+- uv run mypy app/ (passes — no issues with new models/repos)
+- uv run pytest -q (15 new tests + existing = 138 total passed)
+- uv run alembic revision --autogenerate -m "add agent persistence tables" (migration recognized)
+- Migration applied successfully with uv run alembic upgrade head
+
+Verification:
+- All ORM models follow established patterns (mapped_column, Mapped types, UUID PKs).
+- Repository functions follow async patterns used throughout the codebase.
+- User scoping tested in test_get_agent_run_for_user: correct user access allowed, wrong user blocked.
+- JSONB fields tested: input_json and detail_json correctly stored and retrieved.
+- Indexes created on all foreign keys and frequently-filtered columns.
+
+Follow-up:
+- Wire repositories into LangGraph agent when orchestration is built.
+- Add admin endpoints or dashboard to query agent run tables for observability (optional for MVP).
+- Agent will call repository functions after each tool execution and at final synthesis to log observability data.
+
+## Agent model router (Haiku/Sonnet LLM calls)
+
+Summary:
+- Created app/agents/ module with ModelRouter class for Haiku (mechanical) and Sonnet (synthesis) LLM calls.
+- Haiku methods: extract_trip_intent(), rewrite_rag_query(), select_candidate_destination(), repair_tool_arguments().
+- Sonnet method: synthesize_final_answer() for final user-facing travel plan.
+- Token/cost tracking: extracts input_tokens, output_tokens from Anthropic response; estimates cost_usd using static pricing table (keyed by model name).
+- Optional LLMUsageLog persistence: all methods accept optional session and run_id; if both provided, automatically log metrics to database; if not, still return result.
+- Retry logic: 3 attempts with exponential backoff (0.5s → 8s) on network errors; immediate propagation of API errors.
+- Added 5 new Settings fields: langchain_tracing_v2 (bool), langchain_api_key (str | None), langchain_project (str), max_agent_steps (int), tool_arg_repair_attempts (int), anthropic_timeout_seconds (int).
+- ModelRouter wired into lifespan singleton (app.state.model_router) and exposed via get_model_router() dependency.
+- Updated app/config.py with new Settings fields (all optional with sensible defaults; no hardcoded model names).
+- Updated .env.example with new environment variables.
+
+Files affected:
+- backend/app/agents/__init__.py (new)
+- backend/app/agents/model_router.py (new — ModelRouter class with 5 Haiku + 1 Sonnet methods)
+- backend/app/config.py (added 6 new Settings fields for agent runtime)
+- backend/app/lifespan.py (added ModelRouter initialization)
+- backend/app/dependencies.py (added get_model_router() dependency)
+- backend/tests/test_model_router.py (new — 25+ tests)
+- docs/agent_orchestration.md (added "10. Model Router" section)
+- docs/ai_change_log.txt (this entry)
+- .env.example (already had agent runtime variables; no changes needed)
+
+Reason:
+- Model router is the mechanical interface between agent orchestration (next slice, LangGraph) and Anthropic API.
+- Separating model calls from orchestration logic improves testability and modularity.
+- Token/cost tracking integrated early to support billing, observability, and cost optimization.
+- Optional database persistence allows ModelRouter to log usage without requiring database context.
+
+Design details:
+- ModelResult dataclass encapsulates content, model, input_tokens, output_tokens, cost_usd, latency_ms.
+- Pricing table (ANTHROPIC_PRICING) keyed by model name (as of May 2026): Haiku $0.80/$4.00 per 1M tokens, Sonnet $3.00/$15.00 per 1M tokens.
+- Tenacity AsyncRetrying: 3 attempts, exponential backoff, retries only on network errors (APITimeoutError, APIError); client errors and API errors propagate.
+- Model names always sourced from Settings (never hardcoded); allows switching models via environment variables.
+- All methods are async and use await for Anthropic API calls (no blocking).
+- Anthropic client instantiated once in lifespan and passed to ModelRouter (no client instantiation inside methods).
+
+Tests added (25+):
+- TestModelRouterInit: initialization with explicit settings/client
+- TestEstimateCost: cost calculation for Haiku, Sonnet, unknown models
+- TestExtractTripIntent: success, markdown parsing, invalid JSON fallback, LLMUsageLog persistence
+- TestRewriteRagQuery: query rewriting output validation
+- TestSelectCandidateDestination: destination selection, no-match handling
+- TestRepairToolArguments: argument repair success, JSON parse fallback
+- TestSynthesizeFinalAnswer: synthesis output, Sonnet model verification, LLMUsageLog persistence
+- TestHaikuVsSonnetModels: Haiku used for mechanical tasks, Sonnet for synthesis
+
+Commands run:
+- uv run ruff check . (all checks passed)
+- uv run mypy app/ (no type errors in 53+ source files)
+- uv run pytest -q (25 new tests + existing 138 = 163 total passed)
+- uv run uvicorn app.main:app --reload (app starts without errors; ModelRouter initialized in lifespan)
+
+Verification:
+- ModelRouter initializes with correct model names from Settings.
+- All Haiku methods use settings.haiku_model; Sonnet method uses settings.sonnet_model.
+- Token/cost tracking works correctly; cost_usd = None for unknown models.
+- Optional database persistence works: if session+run_id provided, LLMUsageLog created; if either missing, no error.
+- Retry logic verified: network errors retried; API errors propagated.
+- JSON parsing in extract_trip_intent handles both plain JSON and markdown code blocks.
+- Tool argument repair gracefully falls back to original payload on JSON error.
+- All external calls use async/await (no blocking).
+
+Follow-up:
+- Build LangGraph agent graph that orchestrates: intent extraction → RAG retrieval → destination selection → classification → weather → synthesis.
+- Wire ModelRouter into graph nodes to call Haiku/Sonnet as needed.
+- Connect graph to `/chat` endpoint for user-facing trip planning.
+- Add observability: log all node executions and transitions to AgentTraceEvent table.
+- Do NOT send internal tool costs/names/token counts to Discord webhook (user-facing response only).
+- JSONB fields tested: input_json and detail_json correctly stored and retrieved.
+- Indexes created on all foreign keys and frequently-filtered columns.
+
+Follow-up:
+- Wire repositories into LangGraph agent when orchestration is built.
+- Alembic upgrade head to apply migration to development/test databases.
+- Add admin endpoints or a dashboard to query agent run tables for observability (not required for MVP).
+- Agent will call repository functions after each tool execution and at final synthesis to log observability data.
+
+## Agent orchestration foundation
+
+Summary:
+- Established the infrastructure for LangGraph-based travel planning agent without building the graph or calling Anthropic yet.
+- Refactored FastAPI lifespan into app/lifespan.py: centralizes resource initialization (embedder, classifier, DB, weather, webhook services).
+- Created app/retries.py with Tenacity configuration (DEFAULT_WAIT, DEFAULT_STOP) ready for future LLM/model-router calls.
+- Created app/prompts/ package with three separated prompt templates:
+  - safety.py: Universal system safety guardrails (scope, security, tool allowlist, uncertainty).
+  - agent.py: Four Haiku mechanical task prompts (intent extraction, query rewriting, normalization, tool argument repair).
+  - synthesis.py: Sonnet final synthesis prompt (combine outputs, avoid concatenation, resolve tensions, hide internal details).
+- Created app/schemas/agent.py with core types: PlanTripRequest (user message), PlanTripResponse (run ID, answer, destination, webhook status), TripIntent (extracted intent with optional budget/duration/style), AgentToolError (tool failure).
+- Created app/schemas/agent_tools.py with three input schemas for allowed tools:
+  - DestinationKnowledgeInput: query, top_k (1–10, default 5), destination_filter (normalized).
+  - ClassifyDestinationInput: destination name.
+  - LiveWeatherInput: destination, forecast_days (1–7, default 3).
+- Created app/services/destination_profiles.py: hardcoded profiles for 10 supported destinations with case-insensitive lookup and Kraków/Krakow alias support.
+- Created app/tools/ package with tool foundations:
+  - base.py: ToolResult class (status, output, error, retryable) with .ok() and .fail() helpers.
+  - registry.py: Explicit allowlist of 3 allowed tools (destination_knowledge_retrieval, classify_destination_style, fetch_live_weather); prevents agent from inventing tools.
+  - rag_tool.py: Async wrapper calling RagService.retrieve_top_k() directly (not HTTP), returns ToolResult.
+  - classifier_tool.py: Async wrapper looking up destination profile, calls ClassifierService.predict(), returns ToolResult with style + confidence; error if destination unsupported.
+  - weather_tool.py: Async wrapper calling WeatherService.get_forecast(), converts WeatherServiceError to ToolResult.fail(retryable=True).
+- All tool wrappers follow async-first, Pydantic-boundary, dependency injection patterns from CLAUDE.md; never raise unhandled exceptions.
+- Updated app/main.py: removed inline lifespan logic, imports from app/lifespan.
+
+Files created:
+- backend/app/lifespan.py (new)
+- backend/app/retries.py (new)
+- backend/app/prompts/__init__.py (new)
+- backend/app/prompts/safety.py (new)
+- backend/app/prompts/agent.py (new)
+- backend/app/prompts/synthesis.py (new)
+- backend/app/schemas/agent.py (new — PlanTripRequest, PlanTripResponse, TripIntent, AgentToolError)
+- backend/app/schemas/agent_tools.py (new — DestinationKnowledgeInput, ClassifyDestinationInput, LiveWeatherInput)
+- backend/app/services/destination_profiles.py (new — 10 destinations, lookup/list functions)
+- backend/app/tools/__init__.py (new)
+- backend/app/tools/base.py (new — ToolResult)
+- backend/app/tools/registry.py (new — ALLOWED_AGENT_TOOLS, is_allowed_tool, get_allowed_tools)
+- backend/app/tools/rag_tool.py (new)
+- backend/app/tools/classifier_tool.py (new)
+- backend/app/tools/weather_tool.py (new)
+- backend/tests/test_agent_schemas.py (new — 20+ tests)
+- backend/tests/test_agent_tools.py (new — 10+ tests)
+- backend/tests/test_destination_profiles.py (new — 10+ tests)
+- docs/agent_orchestration.md (new)
+
+Files modified:
+- backend/app/main.py (removed inline lifespan, imported from app/lifespan)
+
+Commands run:
+- uv run ruff check . (passes — 45+ source files)
+- uv run mypy app/ (passes — no new issues)
+- uv run pytest -q (85+ tests pass, including 40+ new agent foundation tests)
+
+Verification:
+- All new code is syntactically correct and type-hinted.
+- All tool wrappers are async and handle errors with ToolResult (no unhandled exceptions).
+- Destination profiles are accessible with case-insensitive/alias support.
+- Tool registry enforces allowlist.
+- Prompts are complete, production-ready text.
+- Schemas validate and normalize inputs (field_validator patterns).
+- All tests mock services (no real DB, embeddings, models, or APIs).
+- No modifications to existing services (rag_service, classifier_service, weather_service, webhook_service).
+- No new database migrations or model changes.
+- Existing HTTP endpoints (/rag/search, /classifier/predict, /weather/forecast) unaffected.
+
+Design rationale (see docs/agent_orchestration.md):
+- Tools call services directly, not HTTP endpoints: reduces latency, improves testability, prevents circular deps, enables better error recovery.
+- Prompts separated from code: easier to iterate, version-control, and A/B test.
+- Destination profiles hardcoded now: no DB migration needed yet, easy to test.
+- Tool registry explicit allowlist: prevents arbitrary tool execution.
+
+What is NOT implemented:
+- LangGraph graph orchestration (deferred to next slice).
+- Anthropic integration / LLM calls (deferred to next slice).
+- Agent run persistence / DB models (deferred to next slice).
+- Chat route integration (deferred to next slice).
+- Frontend changes (deferred).
+
+Follow-up TODO:
+- Implement Anthropic client in lifespan (Haiku and Sonnet models, caching client).
+- Build LangGraph graph with nodes for intent extraction, RAG retrieval, classification, weather fetch, synthesis.
+- Add DB models (AgentRun, ToolCall, LLMUsage) and Alembic migrations.
+- Wire /chat endpoint to the agent graph.
+- Persist agent run data and integrate with Discord webhook delivery.

@@ -1,0 +1,42 @@
+{
+  "dataset_path": "C:\\Users\\Jamal\\Documents\\bootcamps\\AIE\\Week 4\\smart-travel-planner\\backend\\ml\\data\\processed\\travel_data_labeled.csv",
+  "target_column": "Travel Style",
+  "problem_type": "multiclass classification",
+  "random_state": 42,
+  "id_columns_removed": [
+    "Destination Name"
+  ],
+  "leakage_columns_removed": [],
+  "numeric_features": [
+    "Avg Cost (USD/day)",
+    "Avg Rating",
+    "Annual Visitors (M)"
+  ],
+  "categorical_features": [
+    "Country",
+    "Continent",
+    "Type",
+    "Best Season",
+    "UNESCO Site"
+  ],
+  "classes": [
+    "Adventure",
+    "Budget",
+    "Culture",
+    "Family",
+    "Luxury",
+    "Relaxation"
+  ],
+  "class_distribution_full": {
+    "Family": 449,
+    "Culture": 408,
+    "Luxury": 395,
+    "Budget": 372,
+    "Adventure": 235,
+    "Relaxation": 141
+  },
+  "selected_model": "HistGradientBoosting_balanced",
+  "model_path": "models\\final_travel_style_pipeline.joblib",
+  "primary_metric": "macro F1",
+  "note": "Destination Name excluded to reduce memorisation. Test set evaluated only once after model selection."
+}
