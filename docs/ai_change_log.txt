@@ -1,5 +1,40 @@
 # AI Change Log
 
+## Chat route — POST /chat/plan-trip (Slice 2)
+
+Summary:
+- Wired POST /chat/plan-trip to AgentService.plan_trip() via dependency injection.
+- Internal costs, token counts, tool logs, and trace events are persisted to DB only;
+  none appear in the user-facing PlanTripResponse.
+- Auth: Supabase JWT required (401 on missing/invalid). Empty message returns 422.
+  Unhandled agent exceptions return 500 with a clean user message.
+- Structured logs: chat.plan_trip.start, chat.plan_trip.success, chat.plan_trip.failed.
+
+Files modified:
+- backend/app/routers/chat.py    — implemented route (was empty stub)
+- docs/agent_orchestration.md   — added Slice 2 section; removed duplicate Next Steps
+- docs/ai_change_log.txt        — this entry
+
+Files created:
+- backend/tests/test_chat.py    — 9 tests (auth, happy path, response shape, 500, 422)
+
+Tests added (test_chat.py):
+- test_endpoint_requires_auth
+- test_endpoint_returns_200_with_plan_trip_response
+- test_endpoint_calls_agent_service_with_correct_args
+- test_endpoint_returns_null_destination_when_none
+- test_response_excludes_internal_cost_and_token_fields
+- test_endpoint_returns_500_on_agent_failure
+- test_endpoint_rejects_empty_message
+- test_endpoint_rejects_whitespace_message
+- test_endpoint_rejects_missing_message_field
+
+Verified: ruff check . ✓  mypy app/ ✓  pytest -q ✓
+
+Follow-up: Slice 3 — trace inspection routes and README evidence with full end-to-end run.
+
+
+
 ## LangGraph controlled agent graph
 
 Summary:

@@ -395,28 +395,70 @@ The controlled graph guarantees:
 - Webhook failure is fully isolated: `WebhookService.send_trip_plan()` never
   raises; the graph always reaches `END`.
 
+## Chat Route — POST /chat/plan-trip
+
+### Overview
+
+`POST /chat/plan-trip` is the single user-facing entrypoint for the travel-planning agent.
+It is implemented in `app/routers/chat.py` and registered in `app/main.py`.
+
+### Request / Response
+
+| Field | Type | Notes |
+|---|---|---|
+| `message` | `string` | User's trip request (non-empty) |
+
+| Field | Type | Notes |
+|---|---|---|
+| `run_id` | `UUID` | Agent run ID for audit/history lookup |
+| `answer` | `string` | Synthesized travel plan |
+| `recommended_destination` | `string \| null` | Best destination selected by the agent |
+| `webhook_delivered` | `bool \| null` | Whether Discord delivery succeeded |
+
+Internal fields (cost, tokens, tool logs, trace events) are **never** included in the response.
+They are persisted to the database only.
+
+### Dependencies
+
+```
+POST /chat/plan-trip
+  ├── get_current_user  → CurrentUser (Supabase JWT, 401 on missing/invalid)
+  ├── get_session       → AsyncSession  (per-request DB session)
+  └── get_agent_service → AgentService  (per-request; compiles graph once in __init__)
+```
+
+### Error Handling
+
+| Condition | HTTP Status |
+|---|---|
+| Missing or invalid JWT | 401 |
+| Empty or whitespace message | 422 |
+| Agent graph raises unhandled exception | 500 (detail: "Travel planning failed. Please try again.") |
+
+Webhook failure is **not** a 500 — it is isolated inside `deliver_webhook` node and reflected only in `webhook_delivered: false` in the response.
+
+### Structured Logs
+
+| Event | When |
+|---|---|
+| `chat.plan_trip.start` | Immediately on request receipt |
+| `chat.plan_trip.success` | After graph completes and session commits |
+| `chat.plan_trip.failed` | If the agent graph raises an unhandled exception |
+
+### Key Files
+
+| File | Responsibility |
+|---|---|
+| `app/routers/chat.py` | Route handler — logs, calls AgentService, raises HTTPException on failure |
+| `app/services/agent_service.py` | `plan_trip()` — creates AgentRun, invokes graph, commits session |
+| `app/dependencies.py` | `get_agent_service()` — wires per-request services into AgentService |
+
 ## Next Steps
 
-### Slice 2: Chat Route Integration
-- Wire the existing `/chat` route to `AgentService`.
-- Return `PlanTripResponse`.
-- Keep internal cost/tool logs out of the user-facing response.
-
 ### Slice 3: Trace Routes and README Evidence
 - Add DB-backed trace inspection routes if time allows.
-- Run one full multi-tool query.
+- Run one full multi-tool query end-to-end.
 - Add a cost breakdown screenshot to README.
-
-### Slice 2: Chat Route Integration
-- Wire the existing `/chat` route to the agent service.
-- Return `PlanTripResponse`.
-- Keep internal cost/tool logs out of the user-facing response.
-
-### Slice 3: Trace Routes and README Evidence
-- Add DB-backed trace inspection routes if time allows.
-- Enable LangSmith tracing.
-- Run one full multi-tool query.
-- Add the LangSmith screenshot and one full-query cost breakdown to README.
 
 ## References
 
