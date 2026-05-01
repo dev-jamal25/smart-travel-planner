@@ -247,7 +247,7 @@ class TestSelectCandidateDestination:
             ["Banff", "Interlaken", "Kyoto"],
         )
 
-        assert selection == "banff"
+        assert selection == "Banff"
 
     @pytest.mark.asyncio
     async def test_select_candidate_destination_no_match(self, model_router):
@@ -265,6 +265,72 @@ class TestSelectCandidateDestination:
         )
 
         assert selection is None
+
+    @pytest.mark.asyncio
+    async def test_haiku_returns_bold_formatted_name(self, model_router):
+        """Haiku returns '**best match:** Santorini' → normalized to 'Santorini'."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="**best match:** Santorini")]
+        mock_response.usage.input_tokens = 50
+        mock_response.usage.output_tokens = 10
+        model_router.client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await model_router.select_candidate_destination(
+            message="Romantic island trip with sunsets",
+            retrieved_destinations=["Santorini", "Bali"],
+        )
+        assert result == "Santorini"
+
+    @pytest.mark.asyncio
+    async def test_haiku_returns_reasoning_paragraph(self, model_router):
+        """Haiku returns a reasoning paragraph → first candidate name extracted."""
+        paragraph = (
+            "Based on the user's request for a romantic island getaway with "
+            "white-washed buildings and sunsets, Santorini is the best match "
+            "among the retrieved destinations."
+        )
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text=paragraph)]
+        mock_response.usage.input_tokens = 50
+        mock_response.usage.output_tokens = 60
+        model_router.client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await model_router.select_candidate_destination(
+            message="Romantic island sunset trip",
+            retrieved_destinations=["Santorini", "Bali"],
+        )
+        assert result == "Santorini"
+
+    @pytest.mark.asyncio
+    async def test_haiku_returns_unsupported_destination(self, model_router):
+        """Haiku returns a name not in the supported list → None."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Paris")]
+        mock_response.usage.input_tokens = 50
+        mock_response.usage.output_tokens = 5
+        model_router.client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await model_router.select_candidate_destination(
+            message="I want to see the Eiffel Tower",
+            retrieved_destinations=["Santorini", "Bali"],
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_normalized_name_fits_db_column(self, model_router):
+        """Normalized destination name is short enough for String(256) column."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Bali")]
+        mock_response.usage.input_tokens = 50
+        mock_response.usage.output_tokens = 5
+        model_router.client.messages.create = AsyncMock(return_value=mock_response)
+
+        result = await model_router.select_candidate_destination(
+            message="Beach relaxation",
+            retrieved_destinations=["Bali"],
+        )
+        assert result is not None
+        assert len(result) <= 256
 
 
 class TestRepairToolArguments:

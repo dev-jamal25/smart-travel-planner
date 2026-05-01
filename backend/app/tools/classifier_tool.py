@@ -53,7 +53,9 @@ async def classify_destination_style(
             )
 
         # Call classifier service with profile
-        style, confidence = classifier_service.predict(profile)
+        prediction = classifier_service.predict(profile)
+        style: str = prediction.travel_style
+        confidence: float | None = prediction.confidence
 
         logger.info(
             "classifier_tool.classify_success",

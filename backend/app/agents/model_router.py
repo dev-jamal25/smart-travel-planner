@@ -21,6 +21,60 @@ from app.prompts.agent import (
 from app.prompts.synthesis import SYNTHESIS_PROMPT
 from app.schemas.agent import TripIntent
 
+# Canonical destination names exactly as stored in destination_profiles and DB.
+SUPPORTED_DESTINATIONS: tuple[str, ...] = (
+    "Interlaken",
+    "Banff",
+    "Bali",
+    "Santorini",
+    "Kyoto",
+    "Istanbul",
+    "Tbilisi",
+    "Kraków",
+    "Dubai",
+    "Singapore",
+)
+
+# Alternative spellings that map to the canonical name.
+_DEST_ALIASES: dict[str, str] = {
+    "krakow": "Kraków",
+    "cracow": "Kraków",
+}
+
+
+def _normalize_destination_response(raw: str, candidates: list[str]) -> str | None:
+    """Extract the first valid destination name from raw LLM output.
+
+    Checks candidates (from RAG) first, then the full supported set, then
+    aliases.  Returns the canonical properly-cased name, or None if no match.
+    """
+    raw_lower = raw.lower().strip()
+    if not raw_lower or raw_lower in ("null", "none"):
+        return None
+
+    # Build lookup: lowercase → canonical name.
+    lookup: dict[str, str] = {d.lower(): d for d in SUPPORTED_DESTINATIONS}
+    lookup.update(_DEST_ALIASES)
+    # Candidate names from RAG take precedence (they may be the exact DB strings).
+    for c in candidates:
+        lookup[c.lower()] = c
+
+    # 1. Exact match.
+    if raw_lower in lookup:
+        return lookup[raw_lower]
+
+    # 2. Substring match: candidates first (they are the most relevant).
+    for dest in candidates:
+        if dest.lower() in raw_lower:
+            return lookup.get(dest.lower(), dest)
+
+    # 3. Substring match: full supported set and aliases.
+    for dest_lower, dest_proper in lookup.items():
+        if dest_lower in raw_lower:
+            return dest_proper
+
+    return None
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -292,10 +346,14 @@ Retrieved destinations:
             step_name="destination_selection",
         )
 
-        selection = result.content.strip().strip('"').lower()
-        if selection == "null" or selection == "none":
-            return None
-        return selection
+        raw = result.content.strip()
+        normalized = _normalize_destination_response(raw, retrieved_destinations)
+        if normalized is None:
+            logger.warning(
+                "select_destination: unrecognized response '%s' — returning None",
+                raw[:120],
+            )
+        return normalized
 
     async def repair_tool_arguments(
         self,

@@ -11,6 +11,7 @@ from app.schemas.agent_tools import (
     DestinationKnowledgeInput,
     LiveWeatherInput,
 )
+from app.schemas.classifier import ClassifierPredictionResponse
 from app.schemas.rag import ChunkResult
 from app.schemas.weather import DailyWeather, WeatherForecastResponse
 from app.services.weather_service import WeatherServiceError
@@ -118,7 +119,7 @@ class TestClassifyDestinationStyleTool:
     async def test_successful_classification(self) -> None:
         mock_classifier_service = MagicMock()
         mock_classifier_service.predict = MagicMock(
-            return_value=("Adventure", 0.92)
+            return_value=ClassifierPredictionResponse(travel_style="Adventure", confidence=0.92)
         )
 
         tool_input = ClassifyDestinationInput(destination="Interlaken")
@@ -130,6 +131,27 @@ class TestClassifyDestinationStyleTool:
         assert result.output["destination"] == "Interlaken"
         assert result.output["travel_style"] == "Adventure"
         assert result.output["confidence"] == pytest.approx(0.92)
+
+    @pytest.mark.asyncio
+    async def test_output_is_flat_dict_with_correct_types(self) -> None:
+        """output dict must have scalar values — not tuples or nested objects."""
+        mock_classifier_service = MagicMock()
+        mock_classifier_service.predict = MagicMock(
+            return_value=ClassifierPredictionResponse(travel_style="Family", confidence=0.998)
+        )
+
+        tool_input = ClassifyDestinationInput(destination="Santorini")
+        with patch("app.tools.classifier_tool.logger"):
+            result = await classify_destination_style(tool_input, mock_classifier_service)
+
+        assert result.status == "ok"
+        travel_style = result.output["travel_style"]
+        confidence = result.output["confidence"]
+        # Must be plain scalars — not tuples, lists, or Pydantic objects
+        assert isinstance(travel_style, str), f"travel_style was {type(travel_style)}"
+        assert isinstance(confidence, float), f"confidence was {type(confidence)}"
+        # Confidence must be formattable as a percentage without crashing
+        assert f"{confidence:.0%}"  # would crash if confidence were a tuple
 
     @pytest.mark.asyncio
     async def test_unsupported_destination(self) -> None:

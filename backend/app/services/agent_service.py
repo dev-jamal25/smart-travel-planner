@@ -86,6 +86,11 @@ class AgentService:
             detail_json={"user_query": request.message},
         )
 
+        # Commit the AgentRun row before entering the graph so that a later
+        # rollback (on graph failure) does not delete it and cause FK violations
+        # when we try to persist the graph_error trace event.
+        await session.commit()
+
         initial_state: AgentGraphState = {
             "run_id": run.id,
             "user_id": current_user.user_id,
@@ -148,6 +153,9 @@ class AgentService:
             )
 
             try:
+                # Rollback any partial write (e.g. failed flush in mark_agent_run_completed)
+                # so the session is clean before writing the failure state.
+                await session.rollback()
                 await log_trace_event(
                     session=session,
                     run_id=run.id,

@@ -109,6 +109,7 @@ def _make_session() -> MagicMock:
     session.add = MagicMock()
     session.flush = AsyncMock()
     session.commit = AsyncMock()
+    session.rollback = AsyncMock()
     return session
 
 
@@ -538,3 +539,248 @@ async def test_final_response_excludes_internal_fields(
     assert "total_cost_usd" not in response_dict
     allowed_keys = {"run_id", "answer", "recommended_destination", "webhook_delivered"}
     assert set(response_dict.keys()) == allowed_keys
+
+
+@pytest.mark.asyncio
+async def test_selected_destination_stored_as_clean_name(
+    model_router: MagicMock,
+    rag_service: MagicMock,
+    classifier_service: MagicMock,
+    weather_service: MagicMock,
+    webhook_service: MagicMock,
+    session: MagicMock,
+) -> None:
+    """mark_agent_run_completed receives a clean destination name, not a paragraph."""
+    model_router.select_candidate_destination = AsyncMock(return_value="Santorini")
+
+    from app.services.agent_service import AgentService
+
+    with _patch_repos() as mocks:
+        svc = AgentService(
+            model_router=model_router,
+            rag_service=rag_service,
+            classifier_service=classifier_service,
+            weather_service=weather_service,
+            webhook_service=webhook_service,
+        )
+        await svc.plan_trip(
+            session=session,
+            current_user=_FAKE_USER,
+            request=PlanTripRequest(message="Romantic island trip."),
+        )
+
+    complete_call = mocks["complete"].call_args
+    recommended = complete_call.kwargs["recommended_destination"]
+    assert recommended == "Santorini"
+    assert len(recommended) <= 256
+
+
+@pytest.mark.asyncio
+async def test_final_answer_can_exceed_256_chars(
+    model_router: MagicMock,
+    rag_service: MagicMock,
+    classifier_service: MagicMock,
+    weather_service: MagicMock,
+    webhook_service: MagicMock,
+    session: MagicMock,
+) -> None:
+    """final_answer is stored in a Text column — no 256-char limit."""
+    long_answer = "X" * 500
+    model_router.synthesize_final_answer = AsyncMock(return_value=long_answer)
+
+    from app.services.agent_service import AgentService
+
+    with _patch_repos() as mocks:
+        svc = AgentService(
+            model_router=model_router,
+            rag_service=rag_service,
+            classifier_service=classifier_service,
+            weather_service=weather_service,
+            webhook_service=webhook_service,
+        )
+        response = await svc.plan_trip(
+            session=session,
+            current_user=_FAKE_USER,
+            request=PlanTripRequest(message="Give me a long detailed plan."),
+        )
+
+    complete_call = mocks["complete"].call_args
+    assert complete_call.kwargs["final_answer"] == long_answer
+    assert response.answer == long_answer
+
+
+@pytest.mark.asyncio
+async def test_rollback_called_before_mark_failed(
+    model_router: MagicMock,
+    rag_service: MagicMock,
+    classifier_service: MagicMock,
+    weather_service: MagicMock,
+    webhook_service: MagicMock,
+) -> None:
+    """When mark_agent_run_completed raises, rollback is called before mark_agent_run_failed."""
+    session = _make_session()
+    rollback_order: list[str] = []
+
+    async def _track_rollback() -> None:
+        rollback_order.append("rollback")
+
+    async def _track_fail(**_kwargs: Any) -> None:
+        rollback_order.append("fail")
+
+    session.rollback = AsyncMock(side_effect=_track_rollback)
+
+    from app.services.agent_service import AgentService
+
+    with _patch_repos() as mocks:
+        mocks["complete"].side_effect = Exception("value too long for type character varying(256)")
+        mocks["fail"].side_effect = _track_fail
+
+        svc = AgentService(
+            model_router=model_router,
+            rag_service=rag_service,
+            classifier_service=classifier_service,
+            weather_service=weather_service,
+            webhook_service=webhook_service,
+        )
+        with pytest.raises(Exception, match="value too long"):
+            await svc.plan_trip(
+                session=session,
+                current_user=_FAKE_USER,
+                request=PlanTripRequest(message="Trip."),
+            )
+
+    assert rollback_order.index("rollback") < rollback_order.index("fail")
+
+
+@pytest.mark.asyncio
+async def test_classifier_tool_output_does_not_crash_graph(
+    model_router: MagicMock,
+    rag_service: MagicMock,
+    weather_service: MagicMock,
+    webhook_service: MagicMock,
+    session: MagicMock,
+) -> None:
+    """Graph synthesize_answer node handles ClassifierPredictionResponse-sourced output."""
+    from app.schemas.classifier import ClassifierPredictionResponse
+    from app.services.classifier_service import ClassifierService
+
+    real_classifier_response = ClassifierPredictionResponse(
+        travel_style="Family", confidence=0.998
+    )
+    classifier_service = MagicMock(spec=ClassifierService)
+    classifier_service.predict = MagicMock(return_value=real_classifier_response)
+
+    from app.services.agent_service import AgentService
+
+    with _patch_repos():
+        svc = AgentService(
+            model_router=model_router,
+            rag_service=rag_service,
+            classifier_service=classifier_service,
+            weather_service=weather_service,
+            webhook_service=webhook_service,
+        )
+        response = await svc.plan_trip(
+            session=session,
+            current_user=_FAKE_USER,
+            request=PlanTripRequest(message="Family trip to Santorini."),
+        )
+
+    assert response.answer  # graph reached synthesis without crashing
+
+
+@pytest.mark.asyncio
+async def test_agent_run_committed_before_graph_invocation(
+    model_router: MagicMock,
+    rag_service: MagicMock,
+    classifier_service: MagicMock,
+    weather_service: MagicMock,
+    webhook_service: MagicMock,
+    session: MagicMock,
+) -> None:
+    """session.commit is called before the graph is invoked, making AgentRun durable."""
+    commit_times: list[str] = []
+
+    async def _track_commit() -> None:
+        commit_times.append("commit")
+
+    async def _track_invoke(state: Any) -> Any:
+        commit_times.append("graph")
+        return state
+
+    session.commit = AsyncMock(side_effect=_track_commit)
+
+    from app.services.agent_service import AgentService
+
+    with _patch_repos():
+        svc = AgentService(
+            model_router=model_router,
+            rag_service=rag_service,
+            classifier_service=classifier_service,
+            weather_service=weather_service,
+            webhook_service=webhook_service,
+        )
+        svc._graph = MagicMock()
+        svc._graph.ainvoke = AsyncMock(side_effect=_track_invoke)
+
+        await svc.plan_trip(
+            session=session,
+            current_user=_FAKE_USER,
+            request=PlanTripRequest(message="Commit order test."),
+        )
+
+    # First commit must happen before graph invocation
+    assert commit_times[0] == "commit"
+    assert "graph" in commit_times
+    assert commit_times.index("commit") < commit_times.index("graph")
+
+
+@pytest.mark.asyncio
+async def test_failure_persistence_chain_after_graph_error(
+    model_router: MagicMock,
+    rag_service: MagicMock,
+    classifier_service: MagicMock,
+    weather_service: MagicMock,
+    webhook_service: MagicMock,
+    session: MagicMock,
+) -> None:
+    """On graph failure: rollback → graph_error trace → mark_failed → commit."""
+    chain: list[str] = []
+
+    session.rollback = AsyncMock(side_effect=lambda: chain.append("rollback"))
+    session.commit = AsyncMock(side_effect=lambda: chain.append("commit"))
+
+    from app.services.agent_service import AgentService
+
+    with _patch_repos() as mocks:
+        mocks["complete"].side_effect = Exception("DB flush failed")
+
+        async def _track_trace(**kwargs: Any) -> None:
+            chain.append(f"trace:{kwargs.get('event_name', '?')}")
+
+        async def _track_fail(**_kwargs: Any) -> None:
+            chain.append("mark_failed")
+
+        mocks["trace_svc"].side_effect = _track_trace
+        mocks["fail"].side_effect = _track_fail
+
+        svc = AgentService(
+            model_router=model_router,
+            rag_service=rag_service,
+            classifier_service=classifier_service,
+            weather_service=weather_service,
+            webhook_service=webhook_service,
+        )
+        with pytest.raises(Exception, match="DB flush failed"):
+            await svc.plan_trip(
+                session=session,
+                current_user=_FAKE_USER,
+                request=PlanTripRequest(message="Failure chain test."),
+            )
+
+    # rollback must precede the graph_error trace (no FK violation possible after commit)
+    assert "rollback" in chain
+    assert "trace:graph_error" in chain
+    assert "mark_failed" in chain
+    assert chain.index("rollback") < chain.index("trace:graph_error")
+    assert chain.index("trace:graph_error") < chain.index("mark_failed")

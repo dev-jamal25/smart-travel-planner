@@ -251,7 +251,9 @@ def build_travel_graph(
             style = result.output.get("travel_style", "unknown")
             conf = result.output.get("confidence")
             summary = (
-                f"style={style} confidence={conf:.0%}" if conf is not None else f"style={style}"
+                f"style={style} confidence={conf:.0%}"
+                if isinstance(conf, (int, float))
+                else f"style={style}"
             )
         else:
             summary = result.error or "error"
@@ -363,7 +365,7 @@ def build_travel_graph(
         if clf_result and clf_result.status == "ok":
             style = clf_result.output.get("travel_style", "unknown")
             conf = clf_result.output.get("confidence")
-            conf_str = f"{conf:.0%}" if conf is not None else "n/a"
+            conf_str = f"{conf:.0%}" if isinstance(conf, (int, float)) else "n/a"
             classifier_summary = f"Travel style: {style} (confidence: {conf_str})"
         else:
             classifier_summary = "Travel style classification unavailable."
