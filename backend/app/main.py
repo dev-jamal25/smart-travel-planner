@@ -9,7 +9,7 @@ from app.dependencies import get_session
 from app.exceptions import AuthError
 from app.lifespan import lifespan
 from app.logging_setup import configure_logging
-from app.routers import auth, chat, classifier, history, rag, weather, webhook
+from app.routers import auth, chat, classifier, history, rag, traces, weather, webhook
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ app.include_router(chat.router)
 app.include_router(classifier.router)
 app.include_router(history.router)
 app.include_router(rag.router)
+app.include_router(traces.router)
 app.include_router(weather.router)
 app.include_router(webhook.router)
 

@@ -266,3 +266,69 @@ async def get_agent_run_for_user(
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def list_tool_calls_for_run(
+    session: AsyncSession,
+    run_id: uuid.UUID,
+) -> list[ToolCallLog]:
+    """Return all tool calls for a run in chronological order.
+
+    Args:
+        session: Database session.
+        run_id: Agent run ID.
+
+    Returns:
+        List of ToolCallLog ordered by created_at ascending.
+    """
+    stmt = (
+        select(ToolCallLog)
+        .where(ToolCallLog.run_id == run_id)
+        .order_by(ToolCallLog.created_at.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def list_llm_usage_for_run(
+    session: AsyncSession,
+    run_id: uuid.UUID,
+) -> list[LLMUsageLog]:
+    """Return all LLM usage records for a run in chronological order.
+
+    Args:
+        session: Database session.
+        run_id: Agent run ID.
+
+    Returns:
+        List of LLMUsageLog ordered by created_at ascending.
+    """
+    stmt = (
+        select(LLMUsageLog)
+        .where(LLMUsageLog.run_id == run_id)
+        .order_by(LLMUsageLog.created_at.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def list_trace_events_for_run(
+    session: AsyncSession,
+    run_id: uuid.UUID,
+) -> list[AgentTraceEvent]:
+    """Return all trace events for a run in chronological order.
+
+    Args:
+        session: Database session.
+        run_id: Agent run ID.
+
+    Returns:
+        List of AgentTraceEvent ordered by created_at ascending.
+    """
+    stmt = (
+        select(AgentTraceEvent)
+        .where(AgentTraceEvent.run_id == run_id)
+        .order_by(AgentTraceEvent.created_at.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())

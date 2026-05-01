@@ -1,5 +1,52 @@
 # AI Change Log
 
+## Trace inspection routes — GET /traces, GET /traces/{run_id} (Slice 3)
+
+Summary:
+- Added two protected read-only endpoints for agent run trace inspection.
+- GET /traces: returns recent agent runs for the authenticated user (default 20, max 50).
+- GET /traces/{run_id}: returns full trace detail — run fields, tool calls, LLM usage, trace events.
+- Both endpoints require Supabase JWT auth (401 on missing/invalid token).
+- User scoping enforced: get_agent_run_for_user returns None for wrong-user access; router returns 404.
+- Internal fields excluded from all responses: error_message, webhook_status_code, API keys, webhook URLs.
+- Added 5 Pydantic response schemas in app/schemas/traces.py:
+  AgentRunSummary, AgentRunTraceDetail, ToolCallLogResponse, LLMUsageLogResponse, AgentTraceEventResponse.
+- Added 3 repository helpers to app/db/repositories/agent_runs.py:
+  list_tool_calls_for_run, list_llm_usage_for_run, list_trace_events_for_run.
+- limit query param validated with Query(ge=1, le=50); defaults to 20.
+- Structured logs: traces.list and traces.get events with user_id, run_id, and sub-list counts.
+
+Files created:
+- backend/app/schemas/traces.py          — 5 response schemas
+- backend/app/routers/traces.py          — route handlers
+- backend/tests/test_traces.py           — 15 tests
+
+Files modified:
+- backend/app/db/repositories/agent_runs.py — added 3 read query helpers
+- backend/app/main.py                        — registered traces router
+- docs/agent_orchestration.md               — added Trace Inspection Routes section
+- docs/ai_change_log.txt                     — this entry
+
+Tests added (15 total in test_traces.py):
+- test_list_traces_requires_auth
+- test_get_trace_requires_auth
+- test_list_traces_returns_current_user_runs
+- test_list_traces_empty_when_no_runs
+- test_list_traces_excludes_internal_fields
+- test_list_traces_default_limit_accepted
+- test_list_traces_custom_limit_accepted
+- test_list_traces_rejects_limit_zero
+- test_list_traces_rejects_limit_over_50
+- test_get_trace_returns_run_with_sublists
+- test_get_trace_tool_call_fields
+- test_get_trace_llm_usage_fields
+- test_get_trace_trace_event_fields
+- test_get_trace_wrong_user_returns_404
+- test_get_trace_missing_run_returns_404
+- test_get_trace_excludes_internal_fields
+
+Verified: ruff check . ✓  mypy app/ ✓  pytest -q ✓
+
 ## Chat route — POST /chat/plan-trip (Slice 2)
 
 Summary:

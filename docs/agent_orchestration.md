@@ -453,12 +453,54 @@ Webhook failure is **not** a 500 — it is isolated inside `deliver_webhook` nod
 | `app/services/agent_service.py` | `plan_trip()` — creates AgentRun, invokes graph, commits session |
 | `app/dependencies.py` | `get_agent_service()` — wires per-request services into AgentService |
 
-## Next Steps
+## Trace Inspection Routes
 
-### Slice 3: Trace Routes and README Evidence
-- Add DB-backed trace inspection routes if time allows.
-- Run one full multi-tool query end-to-end.
-- Add a cost breakdown screenshot to README.
+### Overview
+
+Two protected read-only endpoints let a logged-in user inspect their own agent run history.
+Internal fields (error messages, webhook URLs, stack traces) are never included in any response.
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/traces` | Recent runs for the current user (default 20, max 50) |
+| `GET` | `/traces/{run_id}` | Full trace detail: run + tool calls + LLM usage + trace events |
+
+### Security
+
+- Both endpoints require `Depends(get_current_user)` (Supabase JWT, 401 on missing/invalid).
+- `get_agent_run_for_user` enforces user scoping: runs belonging to a different user return `None`, which becomes a 404.
+- The following fields are **never** included in any response: `error_message`, `webhook_status_code`, API keys, system prompts, webhook URLs, raw stack traces.
+
+### Response Schemas (`app/schemas/traces.py`)
+
+| Schema | Used in |
+|---|---|
+| `AgentRunSummary` | `GET /traces` list items |
+| `AgentRunTraceDetail` | `GET /traces/{run_id}` root object |
+| `ToolCallLogResponse` | Nested in detail: tool invocations |
+| `LLMUsageLogResponse` | Nested in detail: model calls and costs |
+| `AgentTraceEventResponse` | Nested in detail: observability events |
+
+### Repository helpers (`app/db/repositories/agent_runs.py`)
+
+Three new query helpers (all existing user-scoping helpers were already in place):
+
+- `list_tool_calls_for_run(session, run_id)` — chronological tool call logs
+- `list_llm_usage_for_run(session, run_id)` — chronological LLM usage records
+- `list_trace_events_for_run(session, run_id)` — chronological trace events
+
+### Key Files
+
+| File | Responsibility |
+|---|---|
+| `app/routers/traces.py` | Route handlers with structured logging |
+| `app/schemas/traces.py` | Response schemas (5 Pydantic models) |
+| `app/db/repositories/agent_runs.py` | Added 3 read query helpers |
+| `tests/test_traces.py` | 15 tests covering auth, scoping, fields, and forbidden keys |
+
+## Next Steps
 
 ## References
 
