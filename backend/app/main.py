@@ -2,9 +2,11 @@ import logging
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.dependencies import get_session
 from app.exceptions import AuthError
 from app.lifespan import lifespan
@@ -15,6 +17,16 @@ logger = logging.getLogger(__name__)
 
 configure_logging()
 app = FastAPI(lifespan=lifespan)
+
+_settings = get_settings()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router)
 app.include_router(chat.router)

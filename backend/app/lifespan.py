@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -36,6 +37,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Logging must be configured early
     configure_logging()
     settings = get_settings()
+
+    # --- LANGSMITH TRACING (bridge pydantic-settings → os.environ for langsmith) ---
+    # langsmith reads LANGCHAIN_* directly from os.environ, not from pydantic settings.
+    # setdefault preserves any value already injected by Docker / the shell.
+    if settings.langchain_tracing_v2:
+        os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+        if settings.langchain_api_key:
+            os.environ.setdefault("LANGCHAIN_API_KEY", settings.langchain_api_key)
+        os.environ.setdefault("LANGCHAIN_PROJECT", settings.langchain_project)
+        logger.info("LangSmith tracing enabled: project=%s", settings.langchain_project)
+    else:
+        os.environ.setdefault("LANGCHAIN_TRACING_V2", "false")
+        logger.info("LangSmith tracing disabled")
 
     # --- EMBEDDER (lazy-loaded to keep PyTorch out of module-level imports) ---
     app.state.embedder = await asyncio.to_thread(

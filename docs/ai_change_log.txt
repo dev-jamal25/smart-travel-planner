@@ -1,5 +1,54 @@
 # AI Change Log
 
+## LangSmith custom tracing integration
+
+Summary:
+- Added langsmith>=0.7.37 as an explicit dependency (was already a transitive dep of langchain-anthropic).
+- Created app/tracing.py with three pre-configured @traceable decorators:
+  plan_trip_trace (top-level chain), model_call_trace (LLM method chain), tool_call_trace (tool).
+- All decorators use process_inputs to strip non-serialisable / sensitive parameters before
+  any data is sent to LangSmith: self (contains API key), session, run_id, service objects.
+  System prompts, auth tokens, and webhook URLs are never part of traced function arguments.
+- Decorated eight functions:
+  AgentService.plan_trip (top-level), ModelRouter.extract_trip_intent, rewrite_rag_query,
+  select_candidate_destination, synthesize_final_answer; destination_knowledge_retrieval,
+  classify_destination_style, fetch_live_weather.
+- Updated app/lifespan.py to bridge pydantic-settings → os.environ for langsmith:
+  if langchain_tracing_v2=True, sets LANGCHAIN_TRACING_V2/LANGCHAIN_API_KEY/LANGCHAIN_PROJECT
+  via os.environ.setdefault so Docker/shell values take precedence.
+- Updated tests/conftest.py: force LANGCHAIN_TRACING_V2=false in test suite to prevent
+  any accidental LangSmith network calls.
+- When tracing is disabled, decorated functions behave exactly as if undecorated.
+- LangGraph also emits native LangSmith node traces automatically when env vars are set.
+- README screenshot of a LangSmith trace must be captured manually after one real query.
+
+Files created:
+- backend/app/tracing.py                  — tracing decorators and input filters
+- backend/tests/test_langsmith_tracing.py — 7 tests
+
+Files modified:
+- backend/pyproject.toml                      — added langsmith>=0.7.37
+- backend/app/lifespan.py                     — LangSmith env var bridge
+- backend/app/services/agent_service.py       — @plan_trip_trace on plan_trip
+- backend/app/agents/model_router.py          — @model_call_trace on 4 methods
+- backend/app/tools/rag_tool.py               — @tool_call_trace on destination_knowledge_retrieval
+- backend/app/tools/classifier_tool.py        — @tool_call_trace on classify_destination_style
+- backend/app/tools/weather_tool.py           — @tool_call_trace on fetch_live_weather
+- backend/tests/conftest.py                   — force LANGCHAIN_TRACING_V2=false
+- docs/agent_orchestration.md                 — added LangSmith Tracing section
+- docs/ai_change_log.txt                      — this entry
+
+Tests added (7 in test_langsmith_tracing.py):
+- test_langsmith_tracing_disabled_in_test_env
+- test_tracing_module_exports_expected_decorators
+- test_model_call_trace_transparent
+- test_tool_call_trace_transparent_with_tool_result
+- test_tool_call_trace_transparent_with_error_result
+- test_plan_trip_trace_transparent
+- test_no_langsmith_client_during_import
+
+Verified: ruff check . ✓  mypy app/ ✓  pytest -q ✓
+
 ## Trace inspection routes — GET /traces, GET /traces/{run_id} (Slice 3)
 
 Summary:

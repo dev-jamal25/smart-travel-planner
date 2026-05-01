@@ -7,6 +7,7 @@ import structlog
 
 from app.schemas.agent_tools import DestinationKnowledgeInput
 from app.tools.base import ToolResult
+from app.tracing import tool_call_trace
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+@tool_call_trace
 async def destination_knowledge_retrieval(
     tool_input: DestinationKnowledgeInput,
     rag_service: RagService,

@@ -15,6 +15,7 @@ from app.db.repositories.agent_runs import (
     mark_agent_run_failed,
 )
 from app.schemas.agent import PlanTripRequest, PlanTripResponse
+from app.tracing import plan_trip_trace
 
 if TYPE_CHECKING:
     from app.agents.model_router import ModelRouter
@@ -57,6 +58,7 @@ class AgentService:
             webhook_service=webhook_service,
         )
 
+    @plan_trip_trace
     async def plan_trip(
         self,
         session: AsyncSession,

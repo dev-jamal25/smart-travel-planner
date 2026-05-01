@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     weather_cache_ttl_seconds: int = 600
     log_level: str = "INFO"
 
+    # CORS — list of allowed frontend origins
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
     # Agent runtime and tracing
     langchain_tracing_v2: bool = False
     langchain_api_key: str | None = None

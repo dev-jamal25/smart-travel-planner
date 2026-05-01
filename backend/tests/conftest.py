@@ -10,6 +10,12 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-test")
 os.environ.setdefault("WEBHOOK_URL", "https://test.example.com/webhook")
 
+# Force LangSmith tracing off in tests — no network calls to LangSmith.
+# Use os.environ directly (not setdefault) so this overrides any shell value.
+os.environ["LANGCHAIN_TRACING_V2"] = "false"
+os.environ.setdefault("LANGCHAIN_API_KEY", "test-langsmith-key")
+os.environ.setdefault("LANGCHAIN_PROJECT", "smart-travel-planner-test")
+
 from app.config import get_settings  # noqa: E402
 
 get_settings.cache_clear()

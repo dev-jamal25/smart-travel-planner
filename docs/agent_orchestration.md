@@ -453,6 +453,71 @@ Webhook failure is **not** a 500 — it is isolated inside `deliver_webhook` nod
 | `app/services/agent_service.py` | `plan_trip()` — creates AgentRun, invokes graph, commits session |
 | `app/dependencies.py` | `get_agent_service()` — wires per-request services into AgentService |
 
+## LangSmith Tracing
+
+### Overview
+
+The agent is instrumented with LangSmith custom tracing using `langsmith.traceable`.
+Tracing is activated when `LANGCHAIN_TRACING_V2=true` and `LANGCHAIN_API_KEY` are set.
+When disabled, every decorated function behaves exactly as if the decorator were not present.
+
+### How It Is Enabled
+
+`app/lifespan.py` bridges pydantic-settings → `os.environ` at startup:
+
+```python
+if settings.langchain_tracing_v2:
+    os.environ.setdefault("LANGCHAIN_TRACING_V2", "true")
+    os.environ.setdefault("LANGCHAIN_API_KEY", settings.langchain_api_key)
+    os.environ.setdefault("LANGCHAIN_PROJECT", settings.langchain_project)
+```
+
+`setdefault` is used so Docker / shell environment values are always respected.
+
+### Instrumented Functions
+
+| Function | Run Type | Where |
+|---|---|---|
+| `AgentService.plan_trip` | chain | `app/services/agent_service.py` — top-level run |
+| `ModelRouter.extract_trip_intent` | chain | `app/agents/model_router.py` |
+| `ModelRouter.rewrite_rag_query` | chain | `app/agents/model_router.py` |
+| `ModelRouter.select_candidate_destination` | chain | `app/agents/model_router.py` |
+| `ModelRouter.synthesize_final_answer` | chain | `app/agents/model_router.py` |
+| `destination_knowledge_retrieval` | tool | `app/tools/rag_tool.py` |
+| `classify_destination_style` | tool | `app/tools/classifier_tool.py` |
+| `fetch_live_weather` | tool | `app/tools/weather_tool.py` |
+
+### What Is NOT Sent to LangSmith
+
+`process_inputs` filters strip the following before any data leaves the process:
+
+- `self` (contains Anthropic client + settings with API key)
+- `session` (SQLAlchemy AsyncSession — internal DB handle)
+- `run_id` (internal DB FK)
+- Service objects (`rag_service`, `classifier_service`, `weather_service`)
+- System prompts (never passed as arguments to public methods)
+- Auth tokens and webhook URLs (never in traced function arguments)
+
+### Settings Fields
+
+| Field | Default | Purpose |
+|---|---|---|
+| `langchain_tracing_v2` | `False` | Enable/disable LangSmith tracing |
+| `langchain_api_key` | `None` | LangSmith API key |
+| `langchain_project` | `"smart-travel-planner"` | LangSmith project name |
+
+### LangGraph Native Tracing
+
+LangGraph also emits native LangSmith traces for each graph node when
+`LANGCHAIN_TRACING_V2=true`. This happens automatically alongside the custom
+`@traceable` instrumentation. The custom decorators add LLM call and tool-level
+spans that LangGraph's built-in integration does not cover (raw Anthropic SDK calls).
+
+### Note on README Screenshot
+
+A cost breakdown screenshot should be captured manually after running one real
+end-to-end query with `LANGCHAIN_TRACING_V2=true` and added to the README.
+
 ## Trace Inspection Routes
 
 ### Overview

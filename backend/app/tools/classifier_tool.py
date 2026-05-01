@@ -8,6 +8,7 @@ import structlog
 from app.schemas.agent_tools import ClassifyDestinationInput
 from app.services.destination_profiles import get_destination_profile
 from app.tools.base import ToolResult
+from app.tracing import tool_call_trace
 
 if TYPE_CHECKING:
     from app.services.classifier_service import ClassifierService
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+@tool_call_trace
 async def classify_destination_style(
     tool_input: ClassifyDestinationInput,
     classifier_service: ClassifierService,

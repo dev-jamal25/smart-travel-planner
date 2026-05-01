@@ -8,6 +8,7 @@ import structlog
 from app.schemas.agent_tools import LiveWeatherInput
 from app.services.weather_service import WeatherServiceError
 from app.tools.base import ToolResult
+from app.tracing import tool_call_trace
 
 if TYPE_CHECKING:
     from app.services.weather_service import WeatherService
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 
+@tool_call_trace
 async def fetch_live_weather(
     tool_input: LiveWeatherInput,
     weather_service: WeatherService,

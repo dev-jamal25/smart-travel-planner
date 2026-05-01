@@ -20,6 +20,7 @@ from app.prompts.agent import (
 )
 from app.prompts.synthesis import SYNTHESIS_PROMPT
 from app.schemas.agent import TripIntent
+from app.tracing import model_call_trace
 
 # Canonical destination names exactly as stored in destination_profiles and DB.
 SUPPORTED_DESTINATIONS: tuple[str, ...] = (
@@ -228,6 +229,7 @@ class ModelRouter:
 
         return result
 
+    @model_call_trace
     async def extract_trip_intent(
         self,
         message: str,
@@ -273,6 +275,7 @@ class ModelRouter:
             )
             return TripIntent()
 
+    @model_call_trace
     async def rewrite_rag_query(
         self,
         message: str,
@@ -312,6 +315,7 @@ Extracted intent:
 
         return result.content.strip()
 
+    @model_call_trace
     async def select_candidate_destination(
         self,
         message: str,
@@ -408,6 +412,7 @@ Validation error:
             )
             return invalid_payload
 
+    @model_call_trace
     async def synthesize_final_answer(
         self,
         user_message: str,
