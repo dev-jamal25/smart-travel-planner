@@ -1,4 +1,4 @@
-# Smart Travel Planner — Week 4 AIE Bootcamp
+# Smart Travel Planner
 
 ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20React%20%2B%20Postgres%20pgvector-4f6df5)
 ![python](https://img.shields.io/badge/python-3.12-blue)
