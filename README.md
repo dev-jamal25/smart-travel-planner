@@ -227,7 +227,7 @@ Only `VITE_` variables are exposed to the browser. Never expose `SUPABASE_SERVIC
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       Controlled LangGraph Agent                     │
+│                       Controlled Graph Agent                     │
 │                                                                     │
 │  extract_intent        → Haiku                                      │
 │  rewrite_rag_query     → Haiku                                      │
@@ -246,7 +246,7 @@ Only `VITE_` variables are exposed to the browser. Never expose `SUPABASE_SERVIC
 │ - RAG documents      │ │ - email login  │ │ - Anthropic              │
 │ - vector chunks      │ │ - JWT          │ │ - Open-Meteo             │
 │ - agent runs         │ └────────────────┘ │ - Discord webhook        │
-│ - tool logs          │                    │ - LangSmith tracing      │
+│ - tool logs          │                    │ - Smith tracing      │
 │ - LLM usage          │                    └─────────────────────────┘
 │ - trace events       │
 └──────────────────────┘
@@ -465,11 +465,8 @@ There are two files per destination:
 
 #### LangSmith multi-tool trace
 
-> Required by the brief. Capture one full `/chat/plan-trip` run showing the graph/tool execution.
-
-```md
 ![LangSmith trace](docs/screenshots/04-langsmith-trace.png)
-```
+
 
 ### Design choice: controlled graph, not ReAct
 
