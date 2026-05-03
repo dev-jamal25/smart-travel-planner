@@ -467,7 +467,6 @@ There are two files per destination:
 
 ![LangSmith trace](docs/screenshots/04-langsmith-trace.png)
 
-
 ### Design choice: controlled graph, not ReAct
 
 The agent uses LangGraph, but it is not a free-form ReAct agent.
