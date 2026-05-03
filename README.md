@@ -465,11 +465,7 @@ There are two files per destination:
 
 #### LangSmith multi-tool trace
 
-> Required by the brief. Capture one full `/chat/plan-trip` run showing the graph/tool execution.
-
-```md
 ![LangSmith trace](docs/screenshots/04-langsmith-trace.png)
-```
 
 ### Design choice: controlled graph, not ReAct
 
