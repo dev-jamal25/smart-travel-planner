@@ -1,4 +1,4 @@
-# Smart Travel Planner — Week 4 AIE Bootcamp
+# Smart Travel Planner
 
 ![stack](https://img.shields.io/badge/stack-FastAPI%20%2B%20React%20%2B%20Postgres%20pgvector-4f6df5)
 ![python](https://img.shields.io/badge/python-3.12-blue)
@@ -227,7 +227,7 @@ Only `VITE_` variables are exposed to the browser. Never expose `SUPABASE_SERVIC
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                       Controlled LangGraph Agent                     │
+│                       Controlled Graph Agent                     │
 │                                                                     │
 │  extract_intent        → Haiku                                      │
 │  rewrite_rag_query     → Haiku                                      │
@@ -246,7 +246,7 @@ Only `VITE_` variables are exposed to the browser. Never expose `SUPABASE_SERVIC
 │ - RAG documents      │ │ - email login  │ │ - Anthropic              │
 │ - vector chunks      │ │ - JWT          │ │ - Open-Meteo             │
 │ - agent runs         │ └────────────────┘ │ - Discord webhook        │
-│ - tool logs          │                    │ - LangSmith tracing      │
+│ - tool logs          │                    │ - Smith tracing      │
 │ - LLM usage          │                    └─────────────────────────┘
 │ - trace events       │
 └──────────────────────┘
